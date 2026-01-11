@@ -8,4 +8,8 @@ import { UsersModule } from '../users/users.module';
   providers: [AuthService],
   controllers: [AuthController],
 })
+<<<<<<< HEAD
 export class AuthModule {}
+=======
+export class AuthModule {}
+>>>>>>> 2427299 (users + auth)
