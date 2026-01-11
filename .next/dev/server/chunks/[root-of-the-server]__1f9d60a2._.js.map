@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 16, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/Arky/Desktop/PRJ666/backend_skytrackr/pages/api/test.js"],"sourcesContent":["export default function handler(req, res) {\r\n  res.status(200).json({ message: \"SkyTracker backend running!\" });\r\n}\r\n"],"names":[],"mappings":";;;;AAAe,SAAS,QAAQ,GAAG,EAAE,GAAG;IACtC,IAAI,MAAM,CAAC,KAAK,IAAI,CAAC;QAAE,SAAS;IAA8B;AAChE"}}]
-}
