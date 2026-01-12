@@ -19,12 +19,4 @@ import { AuthController } from './auth.controller';
   controllers: [AuthController],
   exports: [AuthService],
 })
-<<<<<<< HEAD
-<<<<<<< HEAD
 export class AuthModule {}
-=======
-export class AuthModule {}
->>>>>>> 2427299 (users + auth)
-=======
-export class AuthModule {}
->>>>>>> ce19cf1 (login with jwt access token)
