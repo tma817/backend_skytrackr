@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { Watchlist } from '../watchlist/watchlist.interface';
-import { Passenger } from '../passenger/passenger.interface';
-import { FlightTicket } from '../flight-ticket/flight-ticket.interface';
-import { Payment } from '../payment/payment.interface';
+// import { Watchlist } from '../watchlist/watchlist.interface';
+// import { Passenger } from '../passenger/passenger.interface';
+// import { FlightTicket } from '../flight-ticket/flight-ticket.interface';
+// import { Payment } from '../payment/payment.interface';
 
 // This should be a real class/interface representing a user entity
 export interface User {
@@ -13,10 +13,10 @@ export interface User {
   password: string;
   phoneNumber?: string;
 
-  watchlistSet?: Watchlist[];
-  passengerSet?: Passenger[];
-  flightTicketSet?: FlightTicket[];
-  payment?: Payment;
+  // watchlistSet?: Watchlist[];
+  // passengerSet?: Passenger[];
+  // flightTicketSet?: FlightTicket[];
+  // payment?: Payment;
 }
 
 @Injectable()
