@@ -12,7 +12,7 @@ export class AuthService {
 
   async signIn(email: string, pass: string): Promise<{ access_token: string }> {
     const user = await this.usersService.findOne(email);
-    if (user?.password !== pass) {
+    if (!user || user?.password !== pass) {
       throw new UnauthorizedException();
     }
     const payload = { sub: user.userId, email: user.email };
@@ -27,12 +27,14 @@ export class AuthService {
     lname: string,
     email: string,
     password: string,
+    phoneNumber?: string,
   ): Promise<Omit<User, 'password'>> {
     const user = await this.usersService.create({
       fname,
       lname,
       email,
       password,
+      phoneNumber,
     });
     return {
       userId: user.userId,
