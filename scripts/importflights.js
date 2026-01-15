@@ -1,12 +1,13 @@
 
 const csv = require('csvtojson')
-require('dotenv').config()
+const path = require("path")
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const { MongoClient } = require('mongodb')
 
 
 
 
-const csvFilePath = 'data/flight_log_mock_data.csv'
+const csvFilePath = path.resolve(__dirname, '../data/flights_data.csv')
 
 async function importFlightsCsv() {
     const uri = process.env.MONGO_URI
@@ -20,7 +21,7 @@ async function importFlightsCsv() {
         const db = client.db('skytrackr_db')
         const collection = db.collection('flights')
 
-        const flights = await csv().fromFile(flights_data.csv)
+        const flights = await csv().fromFile(csvFilePath)
         console.log("Found ${flights.length} flights in CSV")
 
         const result = await collection.insertMany(flights)
@@ -28,7 +29,7 @@ async function importFlightsCsv() {
     } catch (err) {
         console.error(err)
     } finally {
-        await client.clase()
+        await client.close()
         console.log("Connection closed")
     }
 }
