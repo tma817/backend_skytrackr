@@ -6,8 +6,13 @@ export class RegisterDto {
   lname: string;
   email: string;
   password: string;
+  phoneNumber?: string;
 }
 
+export class VerifyOtpDto {
+  email: string;
+  otpCode: string;
+}
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
@@ -27,4 +32,11 @@ export class AuthController {
       regDto.password,
     );
   }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('verify')
+  verify(@Body() verifyDto: VerifyOtpDto) {
+    return this.authService.verifyEmail(verifyDto.email, verifyDto.otpCode);
+  }
+
 }

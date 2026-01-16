@@ -13,6 +13,9 @@ export interface User {
   password: string;
   phoneNumber?: string;
 
+  otpCode?: string | null;
+  otpExpires?: Date | null;
+  isVerified: boolean;
   // watchlistSet?: Watchlist[];
   // passengerSet?: Passenger[];
   // flightTicketSet?: FlightTicket[];
@@ -29,6 +32,7 @@ export class UsersService {
       email: 'johnsmith1@gmail.com',
       password: 'asdf',
       phoneNumber: '1234567890',
+      isVerified: true,
     },
     {
       userId: 2,
@@ -37,6 +41,7 @@ export class UsersService {
       email: 'mariagar22@gmail.com',
       password: 'asdfasdf',
       phoneNumber: '0987654321',
+      isVerified: true,
     },
   ];
 
@@ -59,5 +64,14 @@ export class UsersService {
 
     this.users.push(newUser);
     return newUser;
+  }
+
+  async verifyUser(email: string): Promise<void> {
+    const userIndex = this.users.findIndex(u => u.email === email);
+    if (userIndex !== -1) {
+      this.users[userIndex].isVerified = true;
+      this.users[userIndex].otpCode = null;
+      this.users[userIndex].otpExpires = null;
+    }
   }
 }
