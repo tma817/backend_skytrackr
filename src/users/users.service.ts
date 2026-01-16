@@ -3,75 +3,46 @@ import { Injectable } from '@nestjs/common';
 // import { Passenger } from '../passenger/passenger.interface';
 // import { FlightTicket } from '../flight-ticket/flight-ticket.interface';
 // import { Payment } from '../payment/payment.interface';
-
-// This should be a real class/interface representing a user entity
-export interface User {
-  userId: number;
-  fname: string;
-  lname: string;
-  email: string;
-  password: string;
-  phoneNumber?: string;
-
-  otpCode?: string | null;
-  otpExpires?: Date | null;
-  isVerified: boolean;
-  // watchlistSet?: Watchlist[];
-  // passengerSet?: Passenger[];
-  // flightTicketSet?: FlightTicket[];
-  // payment?: Payment;
-}
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { User } from './schemas/user.schema';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
-  private readonly users: User[] = [
-    {
-      userId: 1,
-      fname: 'john',
-      lname: 'smith',
-      email: 'johnsmith1@gmail.com',
-      password: 'asdf',
-      phoneNumber: '1234567890',
-      isVerified: true,
-    },
-    {
-      userId: 2,
-      fname: 'maria',
-      lname: 'garcia',
-      email: 'mariagar22@gmail.com',
-      password: 'asdfasdf',
-      phoneNumber: '0987654321',
-      isVerified: true,
-    },
-  ];
+  constructor(
+    @InjectModel(User.name) private userModel: Model<User>
+  ) {}
 
-  private nextId = 3;
-
-  findOne(email: string): Promise<User | undefined> {
-    return Promise.resolve(this.users.find((user) => user.email === email));
+  async findOne(email: string): Promise<User | null> {
+    return this.userModel.findOne({ email }).exec();
+  }
+  async hashPassword(password: string): Promise<string> {
+    const saltOrRounds = 10;
+    return await bcrypt.hash(password, saltOrRounds);
   }
 
-  async create(user: Omit<User, 'userId'>): Promise<User> {
-    const existing = await this.findOne(user.email);
-    if (existing) {
-      throw new Error('User already exists');
+  async create(userData: Partial<User>): Promise<any> {
+    if (userData.password) {
+      userData.password = await this.hashPassword(userData.password);
     }
-
-    const newUser: User = {
-      userId: this.nextId++,
-      ...user,
-    };
-
-    this.users.push(newUser);
-    return newUser;
+    const newUser = new this.userModel(userData);
+    return newUser.save();
   }
+
 
   async verifyUser(email: string): Promise<void> {
-    const userIndex = this.users.findIndex(u => u.email === email);
-    if (userIndex !== -1) {
-      this.users[userIndex].isVerified = true;
-      this.users[userIndex].otpCode = null;
-      this.users[userIndex].otpExpires = null;
-    }
+    await this.userModel.updateOne(
+      { email },
+      { 
+        isVerified: true, 
+        otpCode: null, 
+        otpExpires: null 
+      }
+    ).exec();
+  }
+
+  async findAll(): Promise<User[]> {
+    return this.userModel.find().exec();
   }
 }
