@@ -1,4 +1,3 @@
-
 const csv = require('csvtojson')
 const path = require("path")
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
@@ -19,7 +18,7 @@ async function importFlightsCsv() {
 
         //Connect to database
         const db = client.db('skytrackr_db')
-        const collection = db.collection('flights')
+        const collection = db.collection('flights_data')
 
         const flights = await csv().fromFile(csvFilePath)
         console.log("Found ${flights.length} flights in CSV")
