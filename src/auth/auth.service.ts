@@ -67,7 +67,7 @@ export class AuthService {
 
     try {
       await this.resend.emails.send({
-        from: 'SkyTrackr <onboarding@resend.dev>',
+        from: 'SkyTrackr <otp@kaknguyen.info>',
         to: email,
         subject: 'Verification for SkyTrackr',
         html: `
