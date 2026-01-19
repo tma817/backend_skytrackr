@@ -39,4 +39,9 @@ export class AuthController {
     return this.authService.verifyEmail(verifyDto.email, verifyDto.otpCode);
   }
 
+  @Post('resend-otp')
+  async resendOtp(@Body('email') email: string) {
+      return this.authService.resendOtp(email);
+  }
+
 }

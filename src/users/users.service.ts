@@ -45,4 +45,20 @@ export class UsersService {
   async findAll(): Promise<User[]> {
     return this.userModel.find().exec();
   }
+
+  async updateOtp(email: string, otpCode: string, otpExpires: Date): Promise<void> {
+    const result = await this.userModel.updateOne(
+      { email },
+      { 
+        $set: { 
+          otpCode, 
+          otpExpires 
+        } 
+      }
+    ).exec();
+
+    if (result.matchedCount === 0) {
+      throw new Error('User not found');
+    }
+  }
 }

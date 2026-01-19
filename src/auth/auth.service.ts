@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 
@@ -105,5 +105,45 @@ export class AuthService {
     return {
       message: "Successfully verification, you can login right now"
     };
+  }
+
+  async resendOtp(email: string): Promise<{ message: string }> {
+    const user = await this.usersService.findOne(email);
+    if (!user) {
+      throw new UnauthorizedException("User not found");
+    }
+
+    if (user.isVerified) {
+      throw new BadRequestException("This account already verified. Don't need to do it again");
+    }
+
+    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const newOtpExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+    await this.usersService.updateOtp(email, newOtp, newOtpExpires);
+
+    try {
+      await this.resend.emails.send({
+        from: 'SkyTrackr <otp@kaknguyen.info>',
+        to: email,
+        subject: 'Verification for SkyTrackr',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
+            <h2 style="color: #2563eb;">Hi ${user.fname}!</h2>
+            <p>Thank you for joining SkyTrackr. Your verification code is:</p>
+            <div style="background: #f3f4f6; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px;">
+              ${newOtp}
+            </div>
+            <p style="color: #666; font-size: 14px; margin-top: 20px;">
+              This code will expire in 10 minutes (at ${newOtpExpires.toLocaleTimeString()}).
+            </p>
+          </div>
+        `,
+      });
+    } catch (error) {
+      console.error(error);
+    }
+
+    return { message: "A new code has been sent to your email." };
   }
 }
