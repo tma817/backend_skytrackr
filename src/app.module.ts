@@ -6,6 +6,8 @@ import { UsersModule } from './users/users.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AirportsModule } from './airports/airports.module';
+import { WatchlistController } from './watchlist/watchlist.controller';
+import { WatchlistModule } from './watchlist/watchlist.module';
 
 @Module({
   imports: [
@@ -26,9 +28,10 @@ import { AirportsModule } from './airports/airports.module';
 
     AuthModule,
     UsersModule,
-    AirportsModule
+    AirportsModule,
+    WatchlistModule
   ],
-  controllers: [AppController],
+  controllers: [AppController, WatchlistController],
   providers: [AppService],
 })
 export class AppModule {}
