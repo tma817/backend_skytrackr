@@ -30,7 +30,7 @@ export class FlightsService {
     return this.accessToken;
   }
 
-  async searchFlights(origin: string, destination: string, date: string) {
+  async searchFlights(origin: string, destination: string, date: string, adults: number) {
     const token = await this.getAccessToken();
     const url = 'https://test.api.amadeus.com/v2/shopping/flight-offers';
 
@@ -42,7 +42,7 @@ export class FlightsService {
             originLocationCode: origin, 
             destinationLocationCode: destination,
             departureDate: date,
-            adults: 1,
+            adults: adults,
             currencyCode: 'CAD',
             max: 5,
           },
