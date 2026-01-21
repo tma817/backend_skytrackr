@@ -1,23 +1,36 @@
 import { Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { Watchlist, WatchlistDocument } from './schemas/watchlist.schema';
 import { CreateWatchlistDto } from './dto/create-watchlist.dto';
 
 @Injectable()
 export class WatchlistService {
-    private watchlist: CreateWatchlistDto[] = [];
+  constructor(
+    @InjectModel(Watchlist.name) private watchlistModel: Model<WatchlistDocument>,
+  ) {}
 
-    async findAll() {
-        return this.watchlist;
-    }
+  async getWatchlist(userId: string) {
+    return await this.watchlistModel.find({ user_id: userId }).exec();
+  }
 
-    async add(flight: CreateWatchlistDto) {
-        this.watchlist.push(flight);
-        return flight;
-    }
+  async addToWatchlist(createDto: CreateWatchlistDto) {
+    const exists = await this.watchlistModel.findOne({
+      user_id: createDto.user_id,
+      flight_number: createDto.flight_number,
+    });
+    if (exists) return exists;
 
-    async remove(flightId: string) {
-        const index = this.watchlist.findIndex(f => f.flightId === flightId);
-        if (index === -1) return { message: 'Flight not found'};
-        const removed = this.watchlist.splice(index, 1);
-        return removed[0];
-    }
+    const created = new this.watchlistModel(createDto);
+    return await created.save();
+  }
+
+  async removeFromWatchlist(userId: string, flightNumber: string) {
+    const deleted = await this.watchlistModel.findOneAndDelete({
+      user_id: userId,
+      flight_number: flightNumber,
+    }).exec();
+    if (!deleted) return { message: 'Flight not found in watchlist' };
+    return deleted;
+  }
 }

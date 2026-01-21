@@ -9,6 +9,8 @@ import { AirportsModule } from './airports/airports.module';
 import { FlightsModule } from './flights/flights.module';
 import { WatchlistModule } from './watchlist/watchlist.module';
 
+
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -29,10 +31,9 @@ import { WatchlistModule } from './watchlist/watchlist.module';
     AuthModule,
     UsersModule,
     AirportsModule,
-    FlightsModule
-    WatchlistModule
+    FlightsModule,
+    WatchlistModule,
   ],
-  controllers: [AppController, WatchlistController],
   controllers: [AppController],
   providers: [AppService],
 })

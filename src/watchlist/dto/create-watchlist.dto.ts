@@ -1,5 +1,4 @@
 export class CreateWatchlistDto {
-    flightId: string;
-    from: string;
-    to: string;
+    user_id: string;
+    flight_number: string;
 }
