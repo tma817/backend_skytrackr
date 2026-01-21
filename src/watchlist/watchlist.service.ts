@@ -17,7 +17,7 @@ export class WatchlistService {
     async remove(flightId: string) {
         const index = this.watchlist.findIndex(f => f.flightId === flightId);
         if (index === -1) return { message: 'Flight not found'};
-        const removed = this.watchlist.splice(index, 1)
+        const removed = this.watchlist.splice(index, 1);
         return removed[0];
     }
 }
