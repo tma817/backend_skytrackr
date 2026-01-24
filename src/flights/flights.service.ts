@@ -1,13 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { InjectModel } from '@nestjs/mongoose';
+import { FlightSearch } from './schemas/flight.schema';
+import { Model } from 'mongoose';
 
 @Injectable()
 export class FlightsService {
   private accessToken: string = '';
   private tokenExpiry: number = 0;
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(private readonly httpService: HttpService,
+    @InjectModel(FlightSearch.name) private flightSearchModel: Model<FlightSearch>
+  ) {}
 
   private async getAccessToken() {
     const now = Date.now();
@@ -30,12 +35,22 @@ export class FlightsService {
     return this.accessToken;
   }
 
-  async searchFlights(
-    origin: string,
-    destination: string,
-    date: string,
-    adults: number,
-  ) {
+  async searchFlights(origin: string, destination: string, date: string, adults: number) {
+    try {
+      const cachedSearch = await this.flightSearchModel.findOne({
+        origin,
+        destination,
+        departureDate: date,
+        adults
+      }).lean();
+      if (cachedSearch && cachedSearch.results) {
+        console.log('--- Data from Database ---');
+        console.log(cachedSearch.results)
+        return cachedSearch;
+      }
+    } catch (error) {
+      console.error('Error from read database:', error.message);
+    }
     const token = await this.getAccessToken();
     const url = 'https://test.api.amadeus.com/v2/shopping/flight-offers';
 
@@ -53,7 +68,15 @@ export class FlightsService {
           },
         }),
       );
-      return response.data.data;
+      const flights = response.data.data;
+      const newFlight = await this.flightSearchModel.create({
+          origin,
+          destination,
+          departureDate: date,
+          adults,
+          results: flights,
+        });
+      return newFlight.toObject();   
     } catch (error) {
       console.error(
         'Amadeus API Error:',
@@ -63,14 +86,22 @@ export class FlightsService {
     }
   }
 
-  //   //==============================// Additional Filtering Methods //==============================//
 
-  //   //filter flights by price range
-  //   filterFlightsByPrice(flights: any[], minPrice: number, maxPrice: number) {
-  //     return flights.filter((flight) => {
-  //       const price = parseFloat(flight.price.total);
-  //       return price >= minPrice && price <= maxPrice;
-  //     });
-  //   }
-  // }
+  async getFlightDetail(searchId: string, flightId: string)
+  {
+    const flightSearch = await this.flightSearchModel.findById(searchId).lean();
+
+    if(!flightSearch)
+    {
+      throw new NotFoundException("Flights are not available, please try again later!!!");
+    }
+    const flight = flightSearch.results.find(f => f.id === flightId);
+    
+    if(!flight)
+    {
+      throw new NotFoundException("Flight can not be found!")
+    }
+
+    return flight;
+  }
 }
