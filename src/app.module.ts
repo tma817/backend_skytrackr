@@ -8,6 +8,9 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AirportsModule } from './airports/airports.module';
 import { FlightsModule } from './flights/flights.module';
 import { AirlinesModule } from './airlines/airlines.module';
+import { WatchlistModule } from './watchlist/watchlist.module';
+
+
 
 @Module({
   imports: [
@@ -30,8 +33,8 @@ import { AirlinesModule } from './airlines/airlines.module';
     UsersModule,
     AirportsModule,
     FlightsModule,
-    AirlinesModule
-    // WatchlistModule
+    AirlinesModule,
+    WatchlistModule,
   ],
   controllers: [AppController],
   providers: [AppService],

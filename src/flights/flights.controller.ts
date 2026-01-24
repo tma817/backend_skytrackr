@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Param, Query } from '@nestjs/common';
 import { FlightsService } from './flights.service';
 import { AirlinesService } from 'src/airlines/airlines.service';
 
@@ -26,7 +26,7 @@ export default class FlightsController {
     );
 
     return Promise.all(
-      rawFlights.map(async (flight) => {
+      rawFlights.results.map(async (flight) => {
         const itinerary = flight.itineraries[0];
         const segments = itinerary.segments;
         const firstSegment = segments[0];
@@ -36,6 +36,7 @@ export default class FlightsController {
         
         return {
           id: flight.id,
+          search_id: rawFlights._id,
           airlineName: airlineInfo?.name || airlineCode,
           airlineLogo: airlineInfo?.logo || '',
           
@@ -84,5 +85,29 @@ export default class FlightsController {
         };
       })
     );
+  }
+
+  @Get(':id')
+  async getOne(
+    @Param('id') flightId: string, 
+    @Query('searchId') searchId: string
+  ) {
+    if (!searchId) {
+      throw new BadRequestException('searchId is required to retrieve flight details');
+    }
+    const rawFlight = await this.flightsService.getFlightDetail(searchId, flightId);
+
+    const airlineInfo = await this.airlinesService.getAirlineByIata(
+      rawFlight.validatingAirlineCodes[0]
+    );
+
+    const itinerary = rawFlight.itineraries[0];
+    const segments = itinerary.segments;
+
+    return {
+      ...rawFlight,
+      airlineName: airlineInfo?.name || rawFlight.validatingAirlineCodes[0],
+      airlineLogo: airlineInfo?.logo || '',
+    };
   }
 }

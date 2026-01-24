@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { InjectModel } from '@nestjs/mongoose';
@@ -46,7 +46,7 @@ export class FlightsService {
       if (cachedSearch && cachedSearch.results) {
         console.log('--- Data from Database ---');
         console.log(cachedSearch.results)
-        return cachedSearch.results;
+        return cachedSearch;
       }
     } catch (error) {
       console.error('Error from read database:', error.message);
@@ -69,21 +69,36 @@ export class FlightsService {
         }),
       );
       const flights = response.data.data;
-      try {
-        await this.flightSearchModel.create({
+      const newFlight = await this.flightSearchModel.create({
           origin,
           destination,
           departureDate: date,
           adults,
           results: flights,
         });
-      } catch (dbError) {
-        console.error('Database Error:', dbError.message);
-      }
-      return flights;
+      return newFlight.toObject();   
     } catch (error) {
       console.error('Amadeus API Error:', error.response?.data || error.message);
       throw new Error('Could not fetch flights from Amadeus');
     }
+  }
+
+
+  async getFlightDetail(searchId: string, flightId: string)
+  {
+    const flightSearch = await this.flightSearchModel.findById(searchId).lean();
+
+    if(!flightSearch)
+    {
+      throw new NotFoundException("Flights are not available, please try again later!!!");
+    }
+    const flight = flightSearch.results.find(f => f.id === flightId);
+    
+    if(!flight)
+    {
+      throw new NotFoundException("Flight can not be found!")
+    }
+
+    return flight;
   }
 }
