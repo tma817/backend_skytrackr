@@ -85,6 +85,8 @@ export class FlightsService {
       throw new Error('Could not fetch flights from Amadeus');
     }
   }
+<<<<<<< HEAD
+=======
 
 
   async getFlightDetail(searchId: string, flightId: string)
@@ -104,4 +106,5 @@ export class FlightsService {
 
     return flight;
   }
+>>>>>>> 1a895f575a8d268df8fe1713b3a29e29a5e75d99
 }

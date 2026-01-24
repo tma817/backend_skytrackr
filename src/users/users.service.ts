@@ -10,9 +10,7 @@ import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
-  constructor(
-    @InjectModel(User.name) private userModel: Model<User>
-  ) {}
+  constructor(@InjectModel(User.name) private userModel: Model<User>) {}
 
   async findOne(email: string): Promise<User | null> {
     return this.userModel.findOne({ email }).exec();
@@ -30,32 +28,57 @@ export class UsersService {
     return newUser.save();
   }
 
-
   async verifyUser(email: string): Promise<void> {
-    await this.userModel.updateOne(
-      { email },
-      { 
-        isVerified: true, 
-        otpCode: null, 
-        otpExpires: null 
-      }
-    ).exec();
+    await this.userModel
+      .updateOne(
+        { email },
+        {
+          isVerified: true,
+          otpCode: null,
+          otpExpires: null,
+        },
+      )
+      .exec();
+  }
+
+  async updateUser(
+    email: string,
+    updateData: Partial<User>,
+  ): Promise<User | null> {
+    // FOR WHEN UPDATE PASSWORD IS IMPLEMENTED
+    // if (updateData.password) {
+    //   updateData.password = await this.hashPassword(updateData.password);
+    // }
+
+    return this.userModel
+      .findOneAndUpdate(
+        { email },
+        { $set: updateData },
+        { new: true, runValidators: true },
+      )
+      .exec();
   }
 
   async findAll(): Promise<User[]> {
     return this.userModel.find().exec();
   }
 
-  async updateOtp(email: string, otpCode: string, otpExpires: Date): Promise<void> {
-    const result = await this.userModel.updateOne(
-      { email },
-      { 
-        $set: { 
-          otpCode, 
-          otpExpires 
-        } 
-      }
-    ).exec();
+  async updateOtp(
+    email: string,
+    otpCode: string,
+    otpExpires: Date,
+  ): Promise<void> {
+    const result = await this.userModel
+      .updateOne(
+        { email },
+        {
+          $set: {
+            otpCode,
+            otpExpires,
+          },
+        },
+      )
+      .exec();
 
     if (result.matchedCount === 0) {
       throw new Error('User not found');
