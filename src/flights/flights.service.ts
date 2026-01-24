@@ -16,8 +16,8 @@ export class FlightsService {
     const url = 'https://test.api.amadeus.com/v1/security/oauth2/token';
     const params = new URLSearchParams();
     params.append('grant_type', 'client_credentials');
-    params.append('client_id', process.env.AMADEUS_CLIENT_ID ?? "");
-    params.append('client_secret', process.env.AMADEUS_CLIENT_SECRET ?? "");
+    params.append('client_id', process.env.AMADEUS_CLIENT_ID ?? '');
+    params.append('client_secret', process.env.AMADEUS_CLIENT_SECRET ?? '');
 
     const response = await firstValueFrom(
       this.httpService.post(url, params.toString(), {
@@ -30,7 +30,12 @@ export class FlightsService {
     return this.accessToken;
   }
 
-  async searchFlights(origin: string, destination: string, date: string, adults: number) {
+  async searchFlights(
+    origin: string,
+    destination: string,
+    date: string,
+    adults: number,
+  ) {
     const token = await this.getAccessToken();
     const url = 'https://test.api.amadeus.com/v2/shopping/flight-offers';
 
@@ -39,7 +44,7 @@ export class FlightsService {
         this.httpService.get(url, {
           headers: { Authorization: `Bearer ${token}` },
           params: {
-            originLocationCode: origin, 
+            originLocationCode: origin,
             destinationLocationCode: destination,
             departureDate: date,
             adults: adults,
@@ -50,8 +55,22 @@ export class FlightsService {
       );
       return response.data.data;
     } catch (error) {
-      console.error('Amadeus API Error:', error.response?.data || error.message);
+      console.error(
+        'Amadeus API Error:',
+        error.response?.data || error.message,
+      );
       throw new Error('Could not fetch flights from Amadeus');
     }
   }
+
+  //   //==============================// Additional Filtering Methods //==============================//
+
+  //   //filter flights by price range
+  //   filterFlightsByPrice(flights: any[], minPrice: number, maxPrice: number) {
+  //     return flights.filter((flight) => {
+  //       const price = parseFloat(flight.price.total);
+  //       return price >= minPrice && price <= maxPrice;
+  //     });
+  //   }
+  // }
 }
