@@ -7,7 +7,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AirportsModule } from './airports/airports.module';
 import { FlightsModule } from './flights/flights.module';
-import { WatchlistModule } from './watchlist/watchlist.module';
+import { AirlinesModule } from './airlines/airlines.module';
 
 @Module({
   imports: [
@@ -29,10 +29,10 @@ import { WatchlistModule } from './watchlist/watchlist.module';
     AuthModule,
     UsersModule,
     AirportsModule,
-    FlightsModule
-    WatchlistModule
+    FlightsModule,
+    AirlinesModule
+    // WatchlistModule
   ],
-  controllers: [AppController, WatchlistController],
   controllers: [AppController],
   providers: [AppService],
 })
