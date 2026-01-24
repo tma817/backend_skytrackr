@@ -62,15 +62,4 @@ export class FlightsService {
       throw new Error('Could not fetch flights from Amadeus');
     }
   }
-
-  //   //==============================// Additional Filtering Methods //==============================//
-
-  //   //filter flights by price range
-  //   filterFlightsByPrice(flights: any[], minPrice: number, maxPrice: number) {
-  //     return flights.filter((flight) => {
-  //       const price = parseFloat(flight.price.total);
-  //       return price >= minPrice && price <= maxPrice;
-  //     });
-  //   }
-  // }
 }
