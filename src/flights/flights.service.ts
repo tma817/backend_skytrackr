@@ -1,13 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { InjectModel } from '@nestjs/mongoose';
+import { FlightSearch } from './schemas/flight.schema';
+import { Model } from 'mongoose';
 
 @Injectable()
 export class FlightsService {
   private accessToken: string = '';
   private tokenExpiry: number = 0;
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(private readonly httpService: HttpService,
+    @InjectModel(FlightSearch.name) private flightSearchModel: Model<FlightSearch>
+  ) {}
 
   private async getAccessToken() {
     const now = Date.now();
@@ -31,6 +36,21 @@ export class FlightsService {
   }
 
   async searchFlights(origin: string, destination: string, date: string, adults: number) {
+    try {
+      const cachedSearch = await this.flightSearchModel.findOne({
+        origin,
+        destination,
+        departureDate: date,
+        adults
+      }).lean();
+      if (cachedSearch && cachedSearch.results) {
+        console.log('--- Data from Database ---');
+        console.log(cachedSearch.results)
+        return cachedSearch.results;
+      }
+    } catch (error) {
+      console.error('Error from read database:', error.message);
+    }
     const token = await this.getAccessToken();
     const url = 'https://test.api.amadeus.com/v2/shopping/flight-offers';
 
@@ -48,7 +68,19 @@ export class FlightsService {
           },
         }),
       );
-      return response.data.data;
+      const flights = response.data.data;
+      try {
+        await this.flightSearchModel.create({
+          origin,
+          destination,
+          departureDate: date,
+          adults,
+          results: flights,
+        });
+      } catch (dbError) {
+        console.error('Database Error:', dbError.message);
+      }
+      return flights;
     } catch (error) {
       console.error('Amadeus API Error:', error.response?.data || error.message);
       throw new Error('Could not fetch flights from Amadeus');
