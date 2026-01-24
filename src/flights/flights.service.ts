@@ -21,8 +21,8 @@ export class FlightsService {
     const url = 'https://test.api.amadeus.com/v1/security/oauth2/token';
     const params = new URLSearchParams();
     params.append('grant_type', 'client_credentials');
-    params.append('client_id', process.env.AMADEUS_CLIENT_ID ?? "");
-    params.append('client_secret', process.env.AMADEUS_CLIENT_SECRET ?? "");
+    params.append('client_id', process.env.AMADEUS_CLIENT_ID ?? '');
+    params.append('client_secret', process.env.AMADEUS_CLIENT_SECRET ?? '');
 
     const response = await firstValueFrom(
       this.httpService.post(url, params.toString(), {
@@ -59,7 +59,7 @@ export class FlightsService {
         this.httpService.get(url, {
           headers: { Authorization: `Bearer ${token}` },
           params: {
-            originLocationCode: origin, 
+            originLocationCode: origin,
             destinationLocationCode: destination,
             departureDate: date,
             adults: adults,
@@ -78,7 +78,10 @@ export class FlightsService {
         });
       return newFlight.toObject();   
     } catch (error) {
-      console.error('Amadeus API Error:', error.response?.data || error.message);
+      console.error(
+        'Amadeus API Error:',
+        error.response?.data || error.message,
+      );
       throw new Error('Could not fetch flights from Amadeus');
     }
   }
