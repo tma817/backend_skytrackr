@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Body, Delete, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Delete, Param, UseGuards, Request, Req } from '@nestjs/common';
 import { WatchlistService } from './watchlist.service';
 import { CreateWatchlistDto } from './dto/create-watchlist.dto';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.gaurd';
 
 // @Controller('watchlist')
 // export class WatchlistController {
@@ -28,29 +29,31 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 
 @ApiTags('watchlist')
-// @ApiBearerAuth()      
+@ApiBearerAuth()      
 @Controller('watchlist')
 export class WatchlistController {
   constructor(private readonly watchlistService: WatchlistService) {}
 
-  // @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   @Post()
   @ApiOperation({ summary: 'Add flight to watchlist' })
-  async create(@Body() createDto: CreateWatchlistDto & { userId: string }) {
-    return this.watchlistService.create(createDto.userId, createDto);
+  async create(@Request() req ,@Body() createDto: CreateWatchlistDto) {
+    const userId = req.user.userId
+    return this.watchlistService.create(userId, createDto);
   }
 
-  // @UseGuards(JwtAuthGuard)
-  @Get(':userId')
+  @UseGuards(JwtAuthGuard)
+  @Get()
   @ApiOperation({ summary: 'Get all the flights by user from watchlist' })
-  async findAll(@Param('userId') userId: string) {
-    return this.watchlistService.findAllByUser(userId);
+  async findAll(@Request() req) {
+    return this.watchlistService.findAllByUser(req.user.userId);
   }
 
-  // @UseGuards(JwtAuthGuard)
-  @Delete(':id/:userId')
+  @UseGuards(JwtAuthGuard)
+  @Delete(':id')
   @ApiOperation({ summary: 'Delete flight from watch list' })
-  async remove(@Param('userId') userId: string, @Param('id') id: string) {
+  async remove(@Request() req, @Param('id') id: string) {
+    const userId = req.user.userId
     return this.watchlistService.remove(userId, id);
   }
 }
