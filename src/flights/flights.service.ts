@@ -85,8 +85,6 @@ export class FlightsService {
       throw new Error('Could not fetch flights from Amadeus');
     }
   }
-
-
   async getFlightDetail(searchId: string, flightId: string)
   {
     const flightSearch = await this.flightSearchModel.findById(searchId).lean();
