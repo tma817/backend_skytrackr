@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { InjectModel } from '@nestjs/mongoose';
@@ -36,6 +36,12 @@ export class FlightsService {
   }
 
   async searchFlights(origin: string, destination: string, date: string, adults: number) {
+    const today = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD"
+
+    if (date < today) {
+      throw new BadRequestException('Cannot search for flights in the past');
+    }
+
     try {
       const cachedSearch = await this.flightSearchModel.findOne({
         origin,
@@ -82,6 +88,11 @@ export class FlightsService {
         'Amadeus API Error:',
         error.response?.data || error.message,
       );
+
+      if (error.response?.status === 400) {
+        throw new BadRequestException('Invalid flight search parameters');
+      }
+
       throw new Error('Could not fetch flights from Amadeus');
     }
   }
