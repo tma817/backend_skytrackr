@@ -10,8 +10,9 @@ export class FlightsService {
   private accessToken: string = '';
   private tokenExpiry: number = 0;
 
-  constructor(private readonly httpService: HttpService,
-    @InjectModel(FlightSearch.name) private flightSearchModel: Model<FlightSearch>
+  constructor(
+    private readonly httpService: HttpService,
+    @InjectModel(FlightSearch.name) private flightSearchModel: Model<FlightSearch>,
   ) {}
 
   private async getAccessToken() {
@@ -35,7 +36,13 @@ export class FlightsService {
     return this.accessToken;
   }
 
-  async searchFlights(origin: string, destination: string, date: string, adults: number) {
+  async searchFlights(
+    origin: string,
+    destination: string,
+    date: string,
+    adults: number,
+    maxToFetch: number = 50,
+  ) {
     const today = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD"
 
     if (date < today) {
@@ -43,20 +50,22 @@ export class FlightsService {
     }
 
     try {
-      const cachedSearch = await this.flightSearchModel.findOne({
-        origin,
-        destination,
-        departureDate: date,
-        adults
-      }).lean();
+      const cachedSearch = await this.flightSearchModel
+        .findOne({
+          origin,
+          destination,
+          departureDate: date,
+          adults,
+        })
+        .lean();
+
       if (cachedSearch && cachedSearch.results) {
-        console.log('--- Data from Database ---');
-        console.log(cachedSearch.results)
         return cachedSearch;
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error from read database:', error.message);
     }
+
     const token = await this.getAccessToken();
     const url = 'https://test.api.amadeus.com/v2/shopping/flight-offers';
 
@@ -70,24 +79,24 @@ export class FlightsService {
             departureDate: date,
             adults: adults,
             currencyCode: 'CAD',
-            max: 5,
+            max: maxToFetch, // was 5
           },
         }),
       );
+
       const flights = response.data.data;
+
       const newFlight = await this.flightSearchModel.create({
-          origin,
-          destination,
-          departureDate: date,
-          adults,
-          results: flights,
-        });
-      return newFlight.toObject();   
-    } catch (error) {
-      console.error(
-        'Amadeus API Error:',
-        error.response?.data || error.message,
-      );
+        origin,
+        destination,
+        departureDate: date,
+        adults,
+        results: flights,
+      });
+
+      return newFlight.toObject();
+    } catch (error: any) {
+      console.error('Amadeus API Error:', error.response?.data || error.message);
 
       if (error.response?.status === 400) {
         throw new BadRequestException('Invalid flight search parameters');
@@ -96,19 +105,20 @@ export class FlightsService {
       throw new Error('Could not fetch flights from Amadeus');
     }
   }
-  async getFlightDetail(searchId: string, flightId: string)
-  {
+
+  async getFlightDetail(searchId: string, flightId: string) {
     const flightSearch = await this.flightSearchModel.findById(searchId).lean();
 
-    if(!flightSearch)
-    {
-      throw new NotFoundException("Flights are not available, please try again later!!!");
+    if (!flightSearch) {
+      throw new NotFoundException(
+        'Flights are not available, please try again later!!!',
+      );
     }
-    const flight = flightSearch.results.find(f => f.id === flightId);
-    
-    if(!flight)
-    {
-      throw new NotFoundException("Flight can not be found!")
+
+    const flight = flightSearch.results.find((f: any) => f.id === flightId);
+
+    if (!flight) {
+      throw new NotFoundException('Flight can not be found!');
     }
 
     return flight;
