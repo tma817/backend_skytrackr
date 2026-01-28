@@ -31,7 +31,6 @@ export default class FlightsController {
         airline,
         cabin,
         timeFrom,
-        timeTo,
       } = query;
 
       const rawFlights = await this.flightsService.searchFlights(
@@ -79,15 +78,14 @@ export default class FlightsController {
           if (!hasMatchingCabin) return false;
         }
 
-        // Time range
-        if (timeFrom || timeTo) {
+        // Time range - simplified
+        if (timeFrom) {
           const departureAt = flight.itineraries[0].segments[0].departure?.at;
           if (!departureAt) return false;
-          const timeString = departureAt.split('T')[1]?.substring(0, 5); // Get HH:mm
+          const timeString = departureAt.split('T')[1]?.substring(0, 5);
           if (!timeString) return false;
 
-          if (timeFrom && timeString < timeFrom) return false;
-          if (timeTo && timeString > timeTo) return false;
+          if (timeString < timeFrom) return false;
         }
 
         return true;
