@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { InjectModel } from '@nestjs/mongoose';
@@ -12,7 +16,8 @@ export class FlightsService {
 
   constructor(
     private readonly httpService: HttpService,
-    @InjectModel(FlightSearch.name) private flightSearchModel: Model<FlightSearch>,
+    @InjectModel(FlightSearch.name)
+    private flightSearchModel: Model<FlightSearch>,
   ) {}
 
   private async getAccessToken() {
@@ -96,7 +101,10 @@ export class FlightsService {
 
       return newFlight.toObject();
     } catch (error: any) {
-      console.error('Amadeus API Error:', error.response?.data || error.message);
+      console.error(
+        'Amadeus API Error:',
+        error.response?.data || error.message,
+      );
 
       if (error.response?.status === 400) {
         throw new BadRequestException('Invalid flight search parameters');
