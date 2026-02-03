@@ -1,7 +1,22 @@
-import { Controller, Get, Post, Body, Delete, Param, UseGuards, Request, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Delete,
+  Param,
+  UseGuards,
+  Request,
+  Req,
+} from '@nestjs/common';
 import { WatchlistService } from './watchlist.service';
 import { CreateWatchlistDto } from './dto/create-watchlist.dto';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.gaurd';
 
 // @Controller('watchlist')
@@ -27,9 +42,8 @@ import { JwtAuthGuard } from 'src/auth/jwt-auth.gaurd';
 //   }
 // }
 
-
 @ApiTags('watchlist')
-@ApiBearerAuth()      
+@ApiBearerAuth()
 @Controller('watchlist')
 export class WatchlistController {
   constructor(private readonly watchlistService: WatchlistService) {}
@@ -37,8 +51,8 @@ export class WatchlistController {
   @UseGuards(JwtAuthGuard)
   @Post()
   @ApiOperation({ summary: 'Add flight to watchlist' })
-  async create(@Request() req ,@Body() createDto: CreateWatchlistDto) {
-    const userId = req.user.userId
+  async create(@Request() req, @Body() createDto: CreateWatchlistDto) {
+    const userId = req.user.userId;
     return this.watchlistService.create(userId, createDto);
   }
 
@@ -53,7 +67,7 @@ export class WatchlistController {
   @Delete(':id')
   @ApiOperation({ summary: 'Delete flight from watch list' })
   async remove(@Request() req, @Param('id') id: string) {
-    const userId = req.user.userId
+    const userId = req.user.userId;
     return this.watchlistService.remove(userId, id);
   }
 }

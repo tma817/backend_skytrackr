@@ -16,10 +16,10 @@ export class Watchlist extends Document {
   origin: string;
 
   @Prop({ required: true })
-  destination: string; 
+  destination: string;
 
   @Prop({ required: true })
-  initialPrice: number; 
+  initialPrice: number;
 
   @Prop({ required: true })
   currentPrice: number;

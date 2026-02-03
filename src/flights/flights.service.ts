@@ -8,6 +8,7 @@ import { firstValueFrom } from 'rxjs';
 import { InjectModel } from '@nestjs/mongoose';
 import { FlightSearch } from './schemas/flight.schema';
 import { Model } from 'mongoose';
+import { GeminiService } from 'src/gemini/gemini.service';
 
 @Injectable()
 export class FlightsService {
@@ -18,6 +19,7 @@ export class FlightsService {
     private readonly httpService: HttpService,
     @InjectModel(FlightSearch.name)
     private flightSearchModel: Model<FlightSearch>,
+    private readonly geminiService: GeminiService, // INJECT GeminiService
   ) {}
 
   private async getAccessToken() {
@@ -48,29 +50,33 @@ export class FlightsService {
     adults: number,
     maxToFetch: number = 50,
   ) {
-    const today = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD"
+    const today = new Date().toISOString().split('T')[0];
 
     if (date < today) {
       throw new BadRequestException('Cannot search for flights in the past');
     }
 
     try {
-      const cachedSearch = await this.flightSearchModel
-        .findOne({
-          origin,
-          destination,
-          departureDate: date,
-          adults,
-        })
-        .lean();
+      // Check cache first
+      const cachedSearch = await this.flightSearchModel.findOne({
+        origin,
+        destination,
+        departureDate: date,
+        adults,
+      });
 
       if (cachedSearch && cachedSearch.results) {
-        return cachedSearch;
+        // If AI predictions haven't been processed yet, process them in background
+        if (!cachedSearch.aiProcessed) {
+          this.processAIPredictionsInBackground(cachedSearch._id.toString());
+        }
+        return cachedSearch.toObject();
       }
     } catch (error: any) {
       console.error('Error from read database:', error.message);
     }
 
+    // Not in cache, fetch from Amadeus
     const token = await this.getAccessToken();
     const url = 'https://test.api.amadeus.com/v2/shopping/flight-offers';
 
@@ -84,7 +90,7 @@ export class FlightsService {
             departureDate: date,
             adults: adults,
             currencyCode: 'CAD',
-            max: maxToFetch, // was 5
+            max: maxToFetch,
           },
         }),
       );
@@ -97,7 +103,12 @@ export class FlightsService {
         departureDate: date,
         adults,
         results: flights,
+        aiPredictions: [],
+        aiProcessed: false,
       });
+
+      // Process AI predictions in background (don't block the response)
+      this.processAIPredictionsInBackground(newFlight._id.toString());
 
       return newFlight.toObject();
     } catch (error: any) {
@@ -111,6 +122,57 @@ export class FlightsService {
       }
 
       throw new Error('Could not fetch flights from Amadeus');
+    }
+  }
+
+  /**
+   * Process AI predictions in background without blocking
+   */
+  private async processAIPredictionsInBackground(searchId: string) {
+    try {
+      const flightSearch = await this.flightSearchModel.findById(searchId);
+      if (!flightSearch || flightSearch.aiProcessed) return;
+
+      const flights = flightSearch.results;
+      if (!flights || flights.length === 0) return;
+
+      // Prepare data for AI (limit to first 20 flights to control costs)
+      const flightsToPredict = flights.slice(0, 20).map((flight) => {
+        const segments = flight.itineraries?.[0]?.segments || [];
+        const firstSegment = segments[0];
+        const lastSegment = segments[segments.length - 1];
+
+        return {
+          route: `${firstSegment?.departure?.iataCode}-${lastSegment?.arrival?.iataCode}`,
+          currentPrice: parseFloat(flight.price?.total || '0'),
+          departureDate: firstSegment?.departure?.at?.split('T')[0] || '',
+          historicalPrices: [], // TODO: Add historical tracking
+        };
+      });
+
+      // Get AI recommendations in batch
+      console.log(`Processing AI predictions for ${flightsToPredict.length} flights...`);
+      const recommendations = await this.geminiService.batchFlightRecommendations(
+        flightsToPredict,
+      );
+
+      // Build predictions array
+      const aiPredictions = flights.slice(0, 20).map((flight, index) => ({
+        flightId: flight.id,
+        recommendation: recommendations[index]?.recommendation || 'WAIT',
+        confidence: recommendations[index]?.confidence || 'LOW',
+      }));
+
+      // Update database with AI predictions
+      await this.flightSearchModel.findByIdAndUpdate(searchId, {
+        aiPredictions,
+        aiProcessed: true,
+      });
+
+      console.log(`✅ AI predictions cached for search ${searchId}`);
+    } catch (error) {
+      console.error('Error processing AI predictions in background:', error);
+      // Don't throw - this is background processing
     }
   }
 
@@ -130,5 +192,18 @@ export class FlightsService {
     }
 
     return flight;
+  }
+
+  /**
+   * Get AI prediction for a specific flight from cache
+   */
+  getAIPredictionForFlight(
+    aiPredictions: any[],
+    flightId: string,
+  ): { recommendation: string; confidence: string } | null {
+    if (!aiPredictions || aiPredictions.length === 0) return null;
+
+    const prediction = aiPredictions.find((p) => p.flightId === flightId);
+    return prediction || null;
   }
 }

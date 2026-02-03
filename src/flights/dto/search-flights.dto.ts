@@ -17,5 +17,4 @@ export class SearchFlightsDto {
   @IsOptional() @IsString() airline?: string; // IATA code
   @IsOptional() @IsString() cabin?: string; // ECONOMY, BUSINESS, etc.
   @IsOptional() @IsString() timeFrom?: string; // HH:mm
-  @IsOptional() @IsString() timeTo?: string; // HH:mm
 }

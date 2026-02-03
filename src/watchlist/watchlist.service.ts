@@ -34,7 +34,11 @@
 //     return deleted;
 //   }
 // }
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Watchlist } from './schemas/watchlist.schema';
@@ -46,7 +50,8 @@ import { FlightSearch } from 'src/flights/schemas/flight.schema';
 export class WatchlistService {
   constructor(
     @InjectModel(Watchlist.name) private watchlistModel: Model<Watchlist>,
-    @InjectModel(FlightSearch.name) private flightSearchModel: Model<FlightSearch>,
+    @InjectModel(FlightSearch.name)
+    private flightSearchModel: Model<FlightSearch>,
     private readonly airlinesService: AirlinesService,
   ) {}
 
@@ -79,10 +84,12 @@ export class WatchlistService {
 
     return Promise.all(
       watchlistItems.map(async (item) => {
-        const searchDoc = await this.flightSearchModel.findById(item.searchId).lean();
-        
+        const searchDoc = await this.flightSearchModel
+          .findById(item.searchId)
+          .lean();
+
         const rawFlight = searchDoc?.results?.find(
-          (f: any) => f.id === item.flightId
+          (f: any) => f.id === item.flightId,
         );
 
         if (!rawFlight) {
@@ -94,11 +101,14 @@ export class WatchlistService {
             initialPrice: item.initialPrice,
             currentPrice: item.currentPrice,
             status: 'expired',
-            flightDetails: null
+            flightDetails: null,
           };
         }
 
-        const formattedFlight = await this.transformFlightData(rawFlight, item.searchId);
+        const formattedFlight = await this.transformFlightData(
+          rawFlight,
+          item.searchId,
+        );
 
         return {
           _id: item._id,
@@ -106,7 +116,7 @@ export class WatchlistService {
           initialPrice: item.initialPrice,
           currentPrice: item.currentPrice,
           status: item.status,
-          ...formattedFlight
+          ...formattedFlight,
         };
       }),
     );
@@ -117,7 +127,7 @@ export class WatchlistService {
       _id: new Types.ObjectId(id),
       userId: new Types.ObjectId(userId),
     });
-    
+
     if (result.deletedCount === 0) {
       throw new NotFoundException('Watchlist item not found');
     }
@@ -131,14 +141,15 @@ export class WatchlistService {
     const lastSegment = segments[segments.length - 1];
     const airlineCode = flight.validatingAirlineCodes[0];
 
-    const airlineInfo = await this.airlinesService.getAirlineByIata(airlineCode);
-    
+    const airlineInfo =
+      await this.airlinesService.getAirlineByIata(airlineCode);
+
     return {
       id: flight.id,
       search_id: searchId,
       airlineName: airlineInfo?.name || airlineCode,
       airlineLogo: airlineInfo?.logo || '',
-      
+
       departure: {
         time: firstSegment.departure.at.split('T')[1].substring(0, 5),
         date: firstSegment.departure.at.split('T')[0],
@@ -157,27 +168,27 @@ export class WatchlistService {
         .replace('H', 'h ')
         .replace('M', 'm')
         .toLowerCase(),
-      
+
       price: parseFloat(flight.price.total),
       currency: flight.price.currency,
 
       originCode: firstSegment.departure.iataCode,
       destinationCode: lastSegment.arrival.iataCode,
 
-      segments: segments.map(s => ({
+      segments: segments.map((s) => ({
         departure: s.departure,
         arrival: s.arrival,
         carrierCode: s.carrierCode,
         flightNumber: s.number,
         aircraft: s.aircraft.code,
-        duration: s.duration
+        duration: s.duration,
       })),
-      
-      travelerPricings: flight.travelerPricings.map(tp => ({
+
+      travelerPricings: flight.travelerPricings.map((tp) => ({
         fareOption: tp.fareOption,
         travelerType: tp.travelerType,
-        cabin: tp.fareDetailsBySegment[0].cabin, 
-        amenities: tp.fareDetailsBySegment[0].amenities 
+        cabin: tp.fareDetailsBySegment[0].cabin,
+        amenities: tp.fareDetailsBySegment[0].amenities,
       })),
 
       stops: segments.length > 1 ? `${segments.length - 1} stop` : 'Direct',

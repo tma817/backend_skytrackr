@@ -9,6 +9,7 @@ import { AirportsModule } from './airports/airports.module';
 import { FlightsModule } from './flights/flights.module';
 import { AirlinesModule } from './airlines/airlines.module';
 import { WatchlistModule } from './watchlist/watchlist.module';
+import { GeminiModule } from './gemini/gemini.module';
 
 
 
@@ -35,6 +36,7 @@ import { WatchlistModule } from './watchlist/watchlist.module';
     FlightsModule,
     AirlinesModule,
     WatchlistModule,
+    GeminiModule,
   ],
   controllers: [AppController],
   providers: [AppService],

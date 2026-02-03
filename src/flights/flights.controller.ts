@@ -52,23 +52,21 @@ export default class FlightsController {
       }
 
       const all = rawFlights.results;
+      const aiPredictions = rawFlights.aiPredictions || []; // Get cached predictions
+
       // APPLY FILTERS
       const filteredFlights = all.filter((flight) => {
         if (!flight?.itineraries?.[0]?.segments?.length) return false;
-        // Max price
         if (maxPrice && parseFloat(flight.price.total) > maxPrice) return false;
 
-        // Stops
         if (stops !== undefined) {
           const flightStops = flight.itineraries[0].segments.length - 1;
           if (flightStops !== stops) return false;
         }
 
-        // Airline
         if (airline && !flight.validatingAirlineCodes.includes(airline))
           return false;
 
-        // Cabin
         if (cabin) {
           const hasMatchingCabin = flight.travelerPricings?.some(
             (tp: any) =>
@@ -78,13 +76,11 @@ export default class FlightsController {
           if (!hasMatchingCabin) return false;
         }
 
-        // Time range - simplified
         if (timeFrom) {
           const departureAt = flight.itineraries[0].segments[0].departure?.at;
           if (!departureAt) return false;
           const timeString = departureAt.split('T')[1]?.substring(0, 5);
           if (!timeString) return false;
-
           if (timeString < timeFrom) return false;
         }
 
@@ -105,6 +101,12 @@ export default class FlightsController {
           const airlineCode = flight.validatingAirlineCodes[0];
           const airlineInfo =
             await this.airlinesService.getAirlineByIata(airlineCode);
+
+          // Get AI prediction from cache
+          const aiPrediction = this.flightsService.getAIPredictionForFlight(
+            aiPredictions,
+            flight.id,
+          );
 
           return {
             id: flight.id,
@@ -155,6 +157,10 @@ export default class FlightsController {
 
             stops:
               segments.length > 1 ? `${segments.length - 1} stop` : 'Direct',
+
+            // AI prediction from cache (null if not yet processed)
+            aiRecommendation: aiPrediction?.recommendation || null,
+            aiConfidence: aiPrediction?.confidence || null,
           };
         }),
       );
@@ -165,6 +171,7 @@ export default class FlightsController {
         limit,
         total,
         hasMore: end < total,
+        aiProcessed: rawFlights.aiProcessed || false, // Let frontend know if AI is ready
       };
     } catch (error) {
       console.error('Error in FlightsController search method:', error);
@@ -205,7 +212,6 @@ export default class FlightsController {
         airlineLogo: airlineInfo?.logo || '',
       };
     } catch (error) {
-      // ADD THIS ENTIRE BLOCK
       if (error instanceof BadRequestException) {
         throw error;
       }

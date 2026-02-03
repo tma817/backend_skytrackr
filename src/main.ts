@@ -7,9 +7,9 @@ async function bootstrap() {
   const port = process.env.PORT ?? 3000;
 
   app.enableCors({
-    origin: 'http://localhost:4000',
+    origin: ['http://localhost:4000', 'http://localhost:3000'],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: true, 
+    credentials: true,
   });
 
   const config = new DocumentBuilder()
