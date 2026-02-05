@@ -53,10 +53,13 @@ export class WatchlistService {
   async create(userId: string, dto: CreateWatchlistDto): Promise<Watchlist> {
     const existing = await this.watchlistModel.findOne({
       userId: new Types.ObjectId(userId),
+      searchId: dto.searchId,
+      flightId: dto.flightId,
       origin: dto.origin,
       destination: dto.destination,
       departureDate: dto.departureDate,
     });
+    console.log(existing)
 
     if (existing) {
       throw new BadRequestException('You are already watching this route!');
@@ -67,6 +70,8 @@ export class WatchlistService {
       userId: new Types.ObjectId(userId),
       currentPrice: dto.initialPrice,
     });
+
+    console.log("New Item", newItem)
 
     return newItem.save();
   }
@@ -99,7 +104,7 @@ export class WatchlistService {
         }
 
         const formattedFlight = await this.transformFlightData(rawFlight, item.searchId);
-
+        console.log(formattedFlight)
         return {
           _id: item._id,
           savedAt: (item as any).createdAt,
@@ -195,6 +200,6 @@ export class WatchlistService {
   //   }
 
   //   item.currentPrice = newPrice;
-  //   await item.save();
+  //   await item.save();  
   // }
 }
