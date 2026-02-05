@@ -62,6 +62,7 @@ export class FlightsService {
   ) {
     const today = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD"
 
+    console.log(origin, destination)
     if (departureDate < today) {
       throw new BadRequestException('Cannot search for flights in the past');
     }
@@ -91,20 +92,39 @@ export class FlightsService {
     const url = 'https://test.api.amadeus.com/v2/shopping/flight-offers';
 
     try {
+      const queryParams: any = {
+        originLocationCode: origin,
+        destinationLocationCode: destination,
+        departureDate: departureDate,
+        adults: adults,
+        currencyCode: 'CAD',
+        max: maxToFetch,
+      };
+
+      if (returnDate && returnDate != "") {
+        queryParams.returnDate = returnDate;
+      }
+
       const response = await firstValueFrom(
         this.httpService.get(url, {
           headers: { Authorization: `Bearer ${token}` },
-          params: {
-            originLocationCode: origin,
-            destinationLocationCode: destination,
-            departureDate: departureDate,
-            returnDate: returnDate,
-            adults: adults,
-            currencyCode: 'CAD',
-            max: maxToFetch, // was 5
-          },
+          params: queryParams,
         }),
       );
+      // const response = await firstValueFrom(
+      //   this.httpService.get(url, {
+      //     headers: { Authorization: `Bearer ${token}` },
+      //     params: {
+      //       originLocationCode: origin,
+      //       destinationLocationCode: destination,
+      //       departureDate: departureDate,
+      //       returnDate: returnDate,
+      //       adults: adults,
+      //       currencyCode: 'CAD',
+      //       max: maxToFetch, // was 5
+      //     },
+      //   }),
+      // );
 
       const flights = response.data.data;
 
