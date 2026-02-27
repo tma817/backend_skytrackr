@@ -51,6 +51,14 @@ export default class FlightsController {
     }
   }
 
+  @Get('seat-map')
+  async getSeatMap(
+    @Query('searchId') searchId: string,
+    @Query('flightId') flightId: string,
+  ) {
+    return await this.flightsService.getSeatMap(searchId, flightId);
+  }
+
   @Get(':id')
   async getOne(
     @Param('id') flightId: string,
@@ -61,4 +69,5 @@ export default class FlightsController {
     }
     return await this.flightsService.getFlightDetail(searchId, flightId);
   }
+  
 }

@@ -10,15 +10,7 @@ import { FlightSearch } from './schemas/flight.schema';
 import { Model } from 'mongoose';
 import { SearchFlightsDto } from './dto/search-flights.dto';
 import { AirlinesService } from 'src/airlines/airlines.service';
-interface MappedSegment {
-    departure: any;
-    arrival: any;
-    carrierCode: string;
-    flightNumber: string;
-    aircraft: any;
-    duration: string;
-    layover?: string;
-}
+
 @Injectable()
 export class FlightsService {
   private accessToken: string = '';
@@ -62,7 +54,6 @@ export class FlightsService {
   ) {
     const today = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD"
 
-    console.log(origin, destination)
     if (departureDate < today) {
       throw new BadRequestException('Cannot search for flights in the past');
     }
@@ -258,6 +249,107 @@ export class FlightsService {
     };
   }
 
+  //SEAT MAP HERE
+  async getSeatMap(searchId: string, flightId: string) {
+    const flightSearch = await this.flightSearchModel.findById(searchId).lean();
+    if (!flightSearch) {
+      throw new NotFoundException('Search session expired');
+    }
+
+    const rawFlight = flightSearch.results.find((f: any) => String(f.id) === String(flightId));
+    console.log(rawFlight)
+    if (!rawFlight) {
+      throw new NotFoundException('Flight not found');
+    }
+
+    const token = await this.getAccessToken();
+    const url = 'https://test.api.amadeus.com/v1/shopping/seatmaps';
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(
+          url,
+          { data: [rawFlight] },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          },
+        ),
+      );
+
+      return response.data.data;
+    } catch (error: any) {
+      console.error('SeatMap API Error:', error.response?.data || error.message);
+      throw new BadRequestException(
+        error.response?.data?.errors?.[0]?.detail || 'Could not fetch seat map',
+      );
+    }
+  }
+
+  async getFlightDetail(searchId: string, flightId: string) {
+    const flightSearch = await this.flightSearchModel.findById(searchId).lean();
+
+    if (!flightSearch) {
+      throw new NotFoundException('Flights are not available, please try again later!!!');
+    }
+    const rawFlight = flightSearch.results.find((f: any) => f.id === flightId);
+
+    if (!rawFlight) {
+      throw new NotFoundException('Flight can not be found!');
+    }
+
+    const airlineCode = rawFlight.validatingAirlineCodes[0];
+    const airlineInfo = await this.airlineService.getAirlineByIata(airlineCode);
+
+    return {
+      id: rawFlight.id,
+      search_id: flightSearch._id,
+      airline: {
+        name: airlineInfo?.name || airlineCode,
+        logo: airlineInfo?.logo || '',
+      },
+      price: {
+        amount: parseFloat(rawFlight.price.total),
+        currency: rawFlight.price.currency,
+      },
+      itineraries: rawFlight.itineraries.map((it, index) => ({
+        type: index === 0 ? 'outbound' : 'inbound',
+        duration: this.formatDuration(it.duration),
+        stops: it.segments.length - 1,
+        departure: this.formatEndPoint(it.segments[0].departure),
+        arrival: this.formatEndPoint(it.segments[it.segments.length - 1].arrival),
+        segments: it.segments.map((s, sIdx) => {
+          const segmentData: any = {
+            departure: this.formatEndPoint(s.departure), 
+            arrival: this.formatEndPoint(s.arrival),     
+            carrierCode: s.carrierCode,
+            flightNumber: s.number,
+            aircraft: s.aircraft.code,
+            duration: this.formatDuration(s.duration),
+          };
+
+          if (sIdx < it.segments.length - 1) {
+            segmentData.layover = this.calculateLayover(
+              s.arrival.at,
+              it.segments[sIdx + 1].departure.at,
+            );
+          }
+          return segmentData;
+        }),
+      })),
+      cabin: rawFlight.travelerPricings?.[0]?.fareDetailsBySegment[0]?.cabin,
+      baggage: {
+        checked: rawFlight.travelerPricings?.[0]?.fareDetailsBySegment[0]?.includedCheckedBags?.quantity || 0,
+      },
+    };
+  }
+
+
+
+  //SUPPORT FUNCTION GO HERE
+
   private formatDuration(d: string) {
     return d.replace('PT', '').replace('H', 'h ').replace('M', 'm').toLowerCase();
   }
@@ -298,67 +390,5 @@ export class FlightsService {
     if (minutes > 0) result += `${minutes}m`;
 
     return result.trim();
-  }
-  async getFlightDetail(searchId: string, flightId: string) {
-    const flightSearch = await this.flightSearchModel.findById(searchId).lean();
-
-    if (!flightSearch) {
-      throw new NotFoundException('Flights are not available, please try again later!!!');
-    }
-
-    // 1. Tìm flight thô từ kết quả search
-    const rawFlight = flightSearch.results.find((f: any) => f.id === flightId);
-
-    if (!rawFlight) {
-      throw new NotFoundException('Flight can not be found!');
-    }
-
-    // 2. Thực hiện Mapping giống hệt như lúc process results
-    const airlineCode = rawFlight.validatingAirlineCodes[0];
-    const airlineInfo = await this.airlineService.getAirlineByIata(airlineCode);
-
-    // Trả về đúng interface FlightResult mà Frontend mong đợi
-    return {
-      id: rawFlight.id,
-      search_id: flightSearch._id, // Quan trọng: lấy ID của bản ghi search
-      airline: {
-        name: airlineInfo?.name || airlineCode,
-        logo: airlineInfo?.logo || '',
-      },
-      price: {
-        amount: parseFloat(rawFlight.price.total),
-        currency: rawFlight.price.currency,
-      },
-      itineraries: rawFlight.itineraries.map((it, index) => ({
-        type: index === 0 ? 'outbound' : 'inbound',
-        duration: this.formatDuration(it.duration),
-        stops: it.segments.length - 1,
-        departure: this.formatEndPoint(it.segments[0].departure),
-        arrival: this.formatEndPoint(it.segments[it.segments.length - 1].arrival),
-        segments: it.segments.map((s, sIdx) => {
-          // Sử dụng các hàm helper có sẵn của bạn
-          const segmentData: any = {
-            departure: this.formatEndPoint(s.departure), // Format lại endpoint cho segment
-            arrival: this.formatEndPoint(s.arrival),     // Format lại endpoint cho segment
-            carrierCode: s.carrierCode,
-            flightNumber: s.number,
-            aircraft: s.aircraft.code,
-            duration: this.formatDuration(s.duration),
-          };
-
-          if (sIdx < it.segments.length - 1) {
-            segmentData.layover = this.calculateLayover(
-              s.arrival.at,
-              it.segments[sIdx + 1].departure.at,
-            );
-          }
-          return segmentData;
-        }),
-      })),
-      cabin: rawFlight.travelerPricings?.[0]?.fareDetailsBySegment[0]?.cabin,
-      baggage: {
-        checked: rawFlight.travelerPricings?.[0]?.fareDetailsBySegment[0]?.includedCheckedBags?.quantity || 0,
-      },
-    };
   }
 }
