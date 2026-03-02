@@ -21,4 +21,11 @@ export class CreateWatchlistDto {
 
   @ApiProperty({ example: 'China United Airlines' })
   airlineName: string;
+
+  @ApiProperty({ example: 1 })
+  passengers: number;
+
+  @ApiProperty({ example: 'round-trip' })
+  tripType: string;
+
 }

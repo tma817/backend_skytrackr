@@ -58,11 +58,16 @@ export class WatchlistService {
       origin: dto.origin,
       destination: dto.destination,
       departureDate: dto.departureDate,
+      passengers: dto.passengers,
+      tripType: dto.tripType,
     });
     console.log(existing)
 
     if (existing) {
-      throw new BadRequestException('You are already watching this route!');
+      existing.passengers = dto.passengers;
+      existing.tripType = dto.tripType;
+      return existing.save();
+      //throw new BadRequestException('You are already watching this route!');
     }
 
     const newItem = new this.watchlistModel({
@@ -99,7 +104,7 @@ export class WatchlistService {
             initialPrice: item.initialPrice,
             currentPrice: item.currentPrice,
             status: 'expired',
-            flightDetails: null
+            flightDetails: null,
           };
         }
 
@@ -111,6 +116,8 @@ export class WatchlistService {
           initialPrice: item.initialPrice,
           currentPrice: item.currentPrice,
           status: item.status,
+          passengers: item.passengers,
+          tripType: item.tripType,
           ...formattedFlight
         };
       }),

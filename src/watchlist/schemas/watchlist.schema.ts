@@ -29,6 +29,12 @@ export class Watchlist extends Document {
 
   @Prop({ default: 'active' })
   status: string;
+
+  @Prop({ required: true })
+  passengers: number;
+
+  @Prop({ required: true, enum: ['one-way', 'round-trip'] })
+  tripType: string;
 }
 
 export const WatchlistSchema = SchemaFactory.createForClass(Watchlist);
