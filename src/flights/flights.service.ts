@@ -9,6 +9,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import { FlightSearch } from './schemas/flight.schema';
 import { Model } from 'mongoose';
 import { GeminiService } from 'src/gemini/gemini.service';
+import { SearchFlightsDto } from './dto/search-flights.dto';
+import { AirlinesService } from 'src/airlines/airlines.service';
 
 @Injectable()
 export class FlightsService {
@@ -20,6 +22,7 @@ export class FlightsService {
     @InjectModel(FlightSearch.name)
     private flightSearchModel: Model<FlightSearch>,
     private readonly geminiService: GeminiService, // INJECT GeminiService
+    private airlineService: AirlinesService,
   ) {}
 
   private async getAccessToken() {
@@ -46,31 +49,37 @@ export class FlightsService {
   async searchFlights(
     origin: string,
     destination: string,
-    date: string,
+    departureDate: string,
     adults: number,
+    returnDate?: string,
     maxToFetch: number = 50,
   ) {
     const today = new Date().toISOString().split('T')[0];
 
-    if (date < today) {
+    if (departureDate < today) {
       throw new BadRequestException('Cannot search for flights in the past');
+    }
+    if (returnDate && returnDate < departureDate){
+      throw new BadRequestException('Return date must be after departure date');
     }
 
     try {
-      // Check cache first
-      const cachedSearch = await this.flightSearchModel.findOne({
-        origin,
-        destination,
-        departureDate: date,
-        adults,
-      });
+      const cachedSearch = await this.flightSearchModel
+        .findOne({
+          origin,
+          destination,
+          departureDate,
+          returnDate,
+          adults,
+        })
+        .lean();
 
       if (cachedSearch && cachedSearch.results) {
         // If AI predictions haven't been processed yet, process them in background
         if (!cachedSearch.aiProcessed) {
           this.processAIPredictionsInBackground(cachedSearch._id.toString());
         }
-        return cachedSearch.toObject();
+        return cachedSearch;
       }
     } catch (error: any) {
       console.error('Error from read database:', error.message);
@@ -81,17 +90,23 @@ export class FlightsService {
     const url = 'https://test.api.amadeus.com/v2/shopping/flight-offers';
 
     try {
+      const queryParams: any = {
+        originLocationCode: origin,
+        destinationLocationCode: destination,
+        departureDate: departureDate,
+        adults: adults,
+        currencyCode: 'CAD',
+        max: maxToFetch,
+      };
+
+      if (returnDate && returnDate != "") {
+        queryParams.returnDate = returnDate;
+      }
+
       const response = await firstValueFrom(
         this.httpService.get(url, {
           headers: { Authorization: `Bearer ${token}` },
-          params: {
-            originLocationCode: origin,
-            destinationLocationCode: destination,
-            departureDate: date,
-            adults: adults,
-            currencyCode: 'CAD',
-            max: maxToFetch,
-          },
+          params: queryParams,
         }),
       );
 
@@ -100,7 +115,8 @@ export class FlightsService {
       const newFlight = await this.flightSearchModel.create({
         origin,
         destination,
-        departureDate: date,
+        departureDate,
+        returnDate,
         adults,
         results: flights,
         aiPredictions: [],
@@ -121,7 +137,7 @@ export class FlightsService {
         throw new BadRequestException('Invalid flight search parameters');
       }
 
-      throw new Error('Could not fetch flights from Amadeus');
+      throw new BadRequestException('Could not fetch flights from Amadeus');
     }
   }
 
@@ -175,23 +191,256 @@ export class FlightsService {
       // Don't throw - this is background processing
     }
   }
+  async processFlightResults(rawSearch: any, query: SearchFlightsDto)
+  {
+    const {
+      page = 1,
+      limit = 5,
+      maxPrice,
+      stops,
+      airline,
+      cabin,
+      timeFrom,
+    } = query;
+
+    let results = rawSearch.results || [];
+
+    // --- 1. APPLY FILTERS ---
+    const filteredFlights = results.filter((flight) => {
+      if (!flight?.itineraries?.[0]?.segments?.length) return false;
+
+      // Max price
+      if (maxPrice && parseFloat(flight.price.total) > maxPrice) return false;
+
+      // Stops
+      if (stops !== undefined) {
+        const flightStops = flight.itineraries[0].segments.length - 1;
+        if (flightStops !== stops) return false;
+      }
+
+      // Airline
+      if (airline && !flight.validatingAirlineCodes.includes(airline.toUpperCase())) return false;
+
+      // Cabin
+      if (cabin) {
+        const hasMatchingCabin = flight.travelerPricings?.some(
+          (tp: any) =>
+            tp.fareDetailsBySegment?.[0]?.cabin?.toUpperCase() === cabin.toUpperCase(),
+        );
+        if (!hasMatchingCabin) return false;
+      }
+
+      // Time range
+      if (timeFrom) {
+        const departureAt = flight.itineraries[0].segments[0].departure?.at;
+        const timeString = departureAt?.split('T')[1]?.substring(0, 5);
+        if (!timeString || timeString < timeFrom) return false;
+      }
+
+      return true;
+    });
+      // --- 2. PAGINATION ---
+    const total = filteredFlights.length;
+    const start = (page - 1) * limit;
+    const end = start + limit;
+    const pageItems = filteredFlights.slice(start, end);
+
+    // --- 3. MAPPING & FORMATTING ---
+    const items = await Promise.all(
+      pageItems.map(async (flight) => {
+        const airlineCode = flight.validatingAirlineCodes[0];
+        const airlineInfo = await this.airlineService.getAirlineByIata(airlineCode);
+        const aiPrediction = this.getAIPredictionForFlight(rawSearch.aiPredictions || [], flight.id);
+
+        return {
+          id: flight.id,
+          search_id: rawSearch._id,
+          airline: {
+            name: airlineInfo?.name || airlineCode,
+            logo: airlineInfo?.logo || '',
+          },
+          price: {
+            amount: parseFloat(flight.price.total),
+            currency: flight.price.currency,
+          },
+          itineraries: flight.itineraries.map((it, index) => ({
+            type: index === 0 ? 'outbound' : 'inbound',
+            duration: this.formatDuration(it.duration),
+            stops: it.segments.length - 1,
+            departure: this.formatEndPoint(it.segments[0].departure),
+            arrival: this.formatEndPoint(it.segments[it.segments.length - 1].arrival),
+            segments: it.segments.map((s, sIdx) => {
+              const segmentData: any = this.mapSegment(s); 
+              
+              if (sIdx < it.segments.length - 1) {
+                segmentData.layover = this.calculateLayover(
+                  s.arrival.at, 
+                  it.segments[sIdx + 1].departure.at
+                );
+              }
+              return segmentData;
+            }),
+          })),
+          cabin: flight.travelerPricings?.[0]?.fareDetailsBySegment[0]?.cabin,
+          baggage: {
+            checked: flight.travelerPricings?.[0]?.fareDetailsBySegment[0]?.includedCheckedBags?.quantity || 0
+          },
+          aiRecommendation: aiPrediction?.recommendation ?? null,
+          aiConfidence: aiPrediction?.confidence ?? null,
+        };
+      }),
+    );
+
+    return {
+      items,
+      page,
+      limit,
+      total,
+      hasMore: end < total,
+      aiProcessed: rawSearch.aiProcessed ?? false,
+    };
+  }
+
+  //SEAT MAP HERE
+  async getSeatMap(searchId: string, flightId: string) {
+    const flightSearch = await this.flightSearchModel.findById(searchId).lean();
+    if (!flightSearch) {
+      throw new NotFoundException('Search session expired');
+    }
+
+    const rawFlight = flightSearch.results.find((f: any) => String(f.id) === String(flightId));
+    if (!rawFlight) {
+      throw new NotFoundException('Flight not found');
+    }
+
+    const token = await this.getAccessToken();
+    const url = 'https://test.api.amadeus.com/v1/shopping/seatmaps';
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(
+          url,
+          { data: [rawFlight] },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          },
+        ),
+      );
+
+      return response.data.data;
+    } catch (error: any) {
+      console.error('SeatMap API Error:', error.response?.data || error.message);
+      throw new BadRequestException(
+        error.response?.data?.errors?.[0]?.detail || 'Could not fetch seat map',
+      );
+    }
+  }
 
   async getFlightDetail(searchId: string, flightId: string) {
     const flightSearch = await this.flightSearchModel.findById(searchId).lean();
 
     if (!flightSearch) {
-      throw new NotFoundException(
-        'Flights are not available, please try again later!!!',
-      );
+      throw new NotFoundException('Flights are not available, please try again later!!!');
     }
+    const rawFlight = flightSearch.results.find((f: any) => f.id === flightId);
 
-    const flight = flightSearch.results.find((f: any) => f.id === flightId);
-
-    if (!flight) {
+    if (!rawFlight) {
       throw new NotFoundException('Flight can not be found!');
     }
 
-    return flight;
+    const airlineCode = rawFlight.validatingAirlineCodes[0];
+    const airlineInfo = await this.airlineService.getAirlineByIata(airlineCode);
+
+    return {
+      id: rawFlight.id,
+      search_id: flightSearch._id,
+      airline: {
+        name: airlineInfo?.name || airlineCode,
+        logo: airlineInfo?.logo || '',
+      },
+      price: {
+        amount: parseFloat(rawFlight.price.total),
+        currency: rawFlight.price.currency,
+      },
+      itineraries: rawFlight.itineraries.map((it, index) => ({
+        type: index === 0 ? 'outbound' : 'inbound',
+        duration: this.formatDuration(it.duration),
+        stops: it.segments.length - 1,
+        departure: this.formatEndPoint(it.segments[0].departure),
+        arrival: this.formatEndPoint(it.segments[it.segments.length - 1].arrival),
+        segments: it.segments.map((s, sIdx) => {
+          const segmentData: any = {
+            departure: this.formatEndPoint(s.departure), 
+            arrival: this.formatEndPoint(s.arrival),     
+            carrierCode: s.carrierCode,
+            flightNumber: s.number,
+            aircraft: s.aircraft.code,
+            duration: this.formatDuration(s.duration),
+          };
+
+          if (sIdx < it.segments.length - 1) {
+            segmentData.layover = this.calculateLayover(
+              s.arrival.at,
+              it.segments[sIdx + 1].departure.at,
+            );
+          }
+          return segmentData;
+        }),
+      })),
+      cabin: rawFlight.travelerPricings?.[0]?.fareDetailsBySegment[0]?.cabin,
+      baggage: {
+        checked: rawFlight.travelerPricings?.[0]?.fareDetailsBySegment[0]?.includedCheckedBags?.quantity || 0,
+      },
+    };
+  }
+
+
+
+  //SUPPORT FUNCTION GO HERE
+
+  private formatDuration(d: string) {
+    return d.replace('PT', '').replace('H', 'h ').replace('M', 'm').toLowerCase();
+  }
+
+  private formatEndPoint(ep: any) {
+    return {
+      time: ep.at.split('T')[1].substring(0, 5),
+      date: ep.at.split('T')[0],
+      iataCode: ep.iataCode,
+      terminal: ep.terminal,
+    };
+  }
+
+  private mapSegment(s: any) {
+    return {
+      departure: s.departure,
+      arrival: s.arrival,
+      carrierCode: s.carrierCode,
+      flightNumber: s.number,
+      aircraft: s.aircraft.code,
+      duration: s.duration,
+    };
+  }
+  private calculateLayover(arrivalAt: string, nextDepartureAt: string): string {
+    const arrival = new Date(arrivalAt);
+    const departure = new Date(nextDepartureAt);
+
+    const diffMs = departure.getTime() - arrival.getTime();
+
+    if (diffMs <= 0) return '';
+
+    const totalMinutes = Math.floor(diffMs / (1000 * 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    let result = '';
+    if (hours > 0) result += `${hours}h `;
+    if (minutes > 0) result += `${minutes}m`;
+
+    return result.trim();
   }
 
   /**
