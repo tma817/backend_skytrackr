@@ -5,10 +5,12 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AirportsModule } from './airports/airports.module';
 import { FlightsModule } from './flights/flights.module';
 import { AirlinesModule } from './airlines/airlines.module';
 import { WatchlistModule } from './watchlist/watchlist.module';
+import { BookingsModule } from './bookings/bookings.module';
 
 
 
@@ -18,6 +20,7 @@ import { WatchlistModule } from './watchlist/watchlist.module';
       isGlobal: true,
       envFilePath:'.env'
     }),
+    ScheduleModule.forRoot(),
 
     // Connect database in here
     MongooseModule.forRootAsync({
@@ -35,6 +38,7 @@ import { WatchlistModule } from './watchlist/watchlist.module';
     FlightsModule,
     AirlinesModule,
     WatchlistModule,
+    BookingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

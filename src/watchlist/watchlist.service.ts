@@ -1,82 +1,157 @@
-// import { Injectable } from '@nestjs/common';
-// import { InjectModel } from '@nestjs/mongoose';
-// import { Model } from 'mongoose';
-// import { Watchlist, WatchlistDocument } from './schemas/watchlist.schema';
-// import { CreateWatchlistDto } from './dto/create-watchlist.dto';
-
-// @Injectable()
-// export class WatchlistService {
-//   constructor(
-//     @InjectModel(Watchlist.name) private watchlistModel: Model<WatchlistDocument>,
-//   ) {}
-
-//   async getWatchlist(userId: string) {
-//     return await this.watchlistModel.find({ user_id: userId }).exec();
-//   }
-
-//   async addToWatchlist(createDto: CreateWatchlistDto) {
-//     const exists = await this.watchlistModel.findOne({
-//       user_id: createDto.user_id,
-//       flight_number: createDto.flight_number,
-//     });
-//     if (exists) return exists;
-
-//     const created = new this.watchlistModel(createDto);
-//     return await created.save();
-//   }
-
-//   async removeFromWatchlist(userId: string, flightNumber: string) {
-//     const deleted = await this.watchlistModel.findOneAndDelete({
-//       user_id: userId,
-//       flight_number: flightNumber,
-//     }).exec();
-//     if (!deleted) return { message: 'Flight not found in watchlist' };
-//     return deleted;
-//   }
-// }
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
 import { Watchlist } from './schemas/watchlist.schema';
 import { CreateWatchlistDto } from './dto/create-watchlist.dto';
 import { AirlinesService } from 'src/airlines/airlines.service';
-import { FlightSearch } from 'src/flights/schemas/flight.schema';
+import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
 export class WatchlistService {
+  private readonly logger = new Logger(WatchlistService.name);
+  private accessToken: string = '';
+  private tokenExpiry: number = 0;
+
   constructor(
     @InjectModel(Watchlist.name) private watchlistModel: Model<Watchlist>,
-    @InjectModel(FlightSearch.name) private flightSearchModel: Model<FlightSearch>,
+    private readonly httpService: HttpService,
     private readonly airlinesService: AirlinesService,
+    private readonly mailService: MailService,
   ) {}
 
-  async create(userId: string, dto: CreateWatchlistDto): Promise<Watchlist> {
+  // ─── Amadeus Auth ────────────────────────────────────────────────────────────
+
+  private async getAccessToken(): Promise<string> {
+    const now = Date.now();
+    if (this.accessToken && now < this.tokenExpiry) return this.accessToken;
+
+    const url = 'https://test.api.amadeus.com/v1/security/oauth2/token';
+    const params = new URLSearchParams();
+    params.append('grant_type', 'client_credentials');
+    params.append('client_id', process.env.AMADEUS_CLIENT_ID ?? '');
+    params.append('client_secret', process.env.AMADEUS_CLIENT_SECRET ?? '');
+
+    const response = await firstValueFrom(
+      this.httpService.post(url, params.toString(), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      }),
+    );
+
+    this.accessToken = response.data.access_token;
+    this.tokenExpiry = now + response.data.expires_in * 1000;
+    return this.accessToken;
+  }
+
+  // ─── Fetch lowest price for a route from Amadeus ─────────────────────────────
+
+  private async fetchLowestPrice(
+    origin: string,
+    destination: string,
+    departureDate: string,
+    adults: number,
+  ): Promise<number | null> {
+    try {
+      const token = await this.getAccessToken();
+      const response = await firstValueFrom(
+        this.httpService.get('https://test.api.amadeus.com/v2/shopping/flight-offers', {
+          headers: { Authorization: `Bearer ${token}` },
+          params: {
+            originLocationCode: origin,
+            destinationLocationCode: destination,
+            departureDate,
+            adults,
+            currencyCode: 'CAD',
+            max: 10,
+          },
+        }),
+      );
+
+      const offers: any[] = response.data.data ?? [];
+      if (!offers.length) return null;
+
+      const prices = offers.map((o: any) => parseFloat(o.price.total));
+      return Math.min(...prices);
+    } catch (error: any) {
+      this.logger.warn(`Failed to fetch price for ${origin}→${destination}: ${error.message}`);
+      return null;
+    }
+  }
+
+  // ─── Cron: every 6 hours ─────────────────────────────────────────────────────
+
+  @Cron(CronExpression.EVERY_6_HOURS)
+  async checkPrices(): Promise<void> {
+    this.logger.log('Running watchlist price check...');
+
+    const today = new Date().toISOString().split('T')[0];
+    const activeItems = await this.watchlistModel
+      .find({ status: { $in: ['active', 'price_increased'] }, departureDate: { $gte: today } })
+      .lean();
+
+    this.logger.log(`Checking ${activeItems.length} active watchlist items`);
+
+    for (const item of activeItems) {
+      const newPrice = await this.fetchLowestPrice(
+        item.origin,
+        item.destination,
+        item.departureDate,
+        item.passengers,
+      );
+
+      if (newPrice === null) continue;
+
+      const update: any = { currentPrice: newPrice };
+
+      if (newPrice < item.initialPrice) {
+        update.status = 'price_dropped';
+        await this.mailService.sendPriceDropAlert({
+          email: item.userEmail,
+          origin: item.origin,
+          destination: item.destination,
+          departureDate: item.departureDate,
+          initialPrice: item.initialPrice,
+          currentPrice: newPrice,
+          currency: 'CAD',
+          watchlistId: String(item._id),
+        });
+      } else if (newPrice > item.currentPrice) {
+        update.status = 'price_increased';
+      } else {
+        update.status = 'active';
+      }
+
+      await this.watchlistModel.updateOne({ _id: item._id }, { $set: update });
+    }
+
+    this.logger.log('Watchlist price check complete');
+  }
+
+  // ─── CRUD ─────────────────────────────────────────────────────────────────────
+
+  async create(userId: string, userEmail: string, dto: CreateWatchlistDto): Promise<Watchlist> {
     const existing = await this.watchlistModel.findOne({
       userId: new Types.ObjectId(userId),
-      searchId: dto.searchId,
       flightId: dto.flightId,
       origin: dto.origin,
       destination: dto.destination,
       departureDate: dto.departureDate,
-      passengers: dto.passengers,
-      tripType: dto.tripType,
     });
-    console.log(existing)
 
     if (existing) {
       existing.passengers = dto.passengers;
       existing.tripType = dto.tripType;
       return existing.save();
-      //throw new BadRequestException('You are already watching this route!');
     }
 
     const newItem = new this.watchlistModel({
       ...dto,
       userId: new Types.ObjectId(userId),
+      userEmail,
       currentPrice: dto.initialPrice,
     });
-
-    console.log("New Item", newItem)
 
     return newItem.save();
   }
@@ -87,41 +162,20 @@ export class WatchlistService {
       .sort({ createdAt: -1 })
       .lean();
 
-    return Promise.all(
-      watchlistItems.map(async (item) => {
-        const searchDoc = await this.flightSearchModel.findById(item.searchId).lean();
-        
-        const rawFlight = searchDoc?.results?.find(
-          (f: any) => f.id === item.flightId
-        );
-
-        if (!rawFlight) {
-          return {
-            _id: item._id,
-            origin: item.origin,
-            destination: item.destination,
-            departureDate: item.departureDate,
-            initialPrice: item.initialPrice,
-            currentPrice: item.currentPrice,
-            status: 'expired',
-            flightDetails: null,
-          };
-        }
-
-        const formattedFlight = await this.transformFlightData(rawFlight, item.searchId);
-        console.log(formattedFlight)
-        return {
-          _id: item._id,
-          savedAt: (item as any).createdAt,
-          initialPrice: item.initialPrice,
-          currentPrice: item.currentPrice,
-          status: item.status,
-          passengers: item.passengers,
-          tripType: item.tripType,
-          ...formattedFlight
-        };
-      }),
-    );
+    // No FlightSearch model needed here — return watchlist data directly
+    return watchlistItems.map((item) => ({
+      _id: item._id,
+      savedAt: (item as any).createdAt,
+      origin: item.origin,
+      destination: item.destination,
+      departureDate: item.departureDate,
+      initialPrice: item.initialPrice,
+      currentPrice: item.currentPrice,
+      priceDiff: +(item.currentPrice - item.initialPrice).toFixed(2),
+      status: item.status,
+      passengers: item.passengers,
+      tripType: item.tripType,
+    }));
   }
 
   async remove(userId: string, id: string): Promise<any> {
@@ -129,12 +183,14 @@ export class WatchlistService {
       _id: new Types.ObjectId(id),
       userId: new Types.ObjectId(userId),
     });
-    
+
     if (result.deletedCount === 0) {
       throw new NotFoundException('Watchlist item not found');
     }
     return { message: 'Removed from watchlist' };
   }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────────
 
   async transformFlightData(flight: any, searchId: string) {
     const itinerary = flight.itineraries[0];
@@ -144,13 +200,12 @@ export class WatchlistService {
     const airlineCode = flight.validatingAirlineCodes[0];
 
     const airlineInfo = await this.airlinesService.getAirlineByIata(airlineCode);
-    
+
     return {
       id: flight.id,
       search_id: searchId,
       airlineName: airlineInfo?.name || airlineCode,
       airlineLogo: airlineInfo?.logo || '',
-      
       departure: {
         time: firstSegment.departure.at.split('T')[1].substring(0, 5),
         date: firstSegment.departure.at.split('T')[0],
@@ -163,50 +218,10 @@ export class WatchlistService {
         iataCode: lastSegment.arrival.iataCode,
         terminal: lastSegment.arrival.terminal,
       },
-
-      duration: itinerary.duration
-        .replace('PT', '')
-        .replace('H', 'h ')
-        .replace('M', 'm')
-        .toLowerCase(),
-      
+      duration: itinerary.duration.replace('PT', '').replace('H', 'h ').replace('M', 'm').toLowerCase(),
       price: parseFloat(flight.price.total),
       currency: flight.price.currency,
-
-      originCode: firstSegment.departure.iataCode,
-      destinationCode: lastSegment.arrival.iataCode,
-
-      segments: segments.map(s => ({
-        departure: s.departure,
-        arrival: s.arrival,
-        carrierCode: s.carrierCode,
-        flightNumber: s.number,
-        aircraft: s.aircraft.code,
-        duration: s.duration
-      })),
-      
-      travelerPricings: flight.travelerPricings.map(tp => ({
-        fareOption: tp.fareOption,
-        travelerType: tp.travelerType,
-        cabin: tp.fareDetailsBySegment[0].cabin, 
-        amenities: tp.fareDetailsBySegment[0].amenities 
-      })),
-
       stops: segments.length > 1 ? `${segments.length - 1} stop` : 'Direct',
     };
   }
-
-  // async updatePrice(id: string, newPrice: number) {
-  //   const item = await this.watchlistModel.findById(id);
-  //   if (!item) return;
-
-  //   if (newPrice < item.currentPrice) {
-  //     item.status = 'price_dropped';
-  //   } else if (newPrice > item.currentPrice) {
-  //     item.status = 'price_increased';
-  //   }
-
-  //   item.currentPrice = newPrice;
-  //   await item.save();  
-  // }
 }

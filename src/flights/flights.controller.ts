@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Post,
   Query,
 } from '@nestjs/common';
 import { FlightsService } from './flights.service';
@@ -24,20 +25,39 @@ export default class FlightsController {
       departureDate = '',
       adults = 1,
       returnDate,
-    } = query
+      children,
+      currencyCode,
+      travelClass,
+      max,
+      nonStop,
+      includedAirlineCodes,
+      excludedAirlineCodes,
+      maxPrice,
+      includedCheckedBagsOnly,
+      excludedAlliances,
+    } = query;
     if (!origin || !destination || !departureDate) {
       throw new BadRequestException('Origin, destination, and departure date are required');
     }
 
     try {
-      const rawFlights = await this.flightsService.searchFlights(
+      const rawFlights = await this.flightsService.searchFlights({
         origin,
         destination,
         departureDate,
         adults,
         returnDate,
-        50,
-      );
+        children,
+        currencyCode,
+        travelClass,
+        max,
+        nonStop,
+        includedAirlineCodes,
+        excludedAirlineCodes,
+        maxPrice,
+        includedCheckedBagsOnly,
+        excludedAlliances,
+      });
 
       if (!rawFlights || !rawFlights.results) {
         return { items: [], total: 0, page: query.page || 1 };
@@ -49,6 +69,44 @@ export default class FlightsController {
       console.error('Error in search:', error.message);
       throw new BadRequestException(error.message || 'Failed to search flights');
     }
+  }
+
+  @Post('confirm-price')
+  async confirmPrice(
+    @Query('searchId') searchId: string,
+    @Query('flightId') flightId: string,
+  ) {
+    if (!searchId || !flightId) {
+      throw new BadRequestException('searchId and flightId are required');
+    }
+    return await this.flightsService.confirmPrice(searchId, flightId);
+  }
+
+  /**
+   * GET /flights/price-grid
+   * ?origin=YYZ&destination=LAX&departureDate=2025-06-01&currency=CAD&oneWay=true
+   *
+   * Returns cheapest price per day for the given month.
+   * Single Amadeus API call; cached 6 h in MongoDB.
+   */
+  @Get('price-grid')
+  async getPriceGrid(
+    @Query('origin') origin: string,
+    @Query('destination') destination: string,
+    @Query('departureDate') departureDate: string,
+    @Query('currency') currency?: string,
+    @Query('oneWay') oneWay?: string,
+  ) {
+    if (!origin || !destination || !departureDate) {
+      throw new BadRequestException('origin, destination, and departureDate are required');
+    }
+    return this.flightsService.getPriceGrid({
+      origin,
+      destination,
+      departureDate,
+      currency,
+      oneWay: oneWay !== 'false',
+    });
   }
 
   @Get('seat-map')

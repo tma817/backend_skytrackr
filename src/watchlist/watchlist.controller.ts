@@ -37,9 +37,8 @@ export class WatchlistController {
   @UseGuards(JwtAuthGuard)
   @Post()
   @ApiOperation({ summary: 'Add flight to watchlist' })
-  async create(@Request() req ,@Body() createDto: CreateWatchlistDto) {
-    const userId = req.user.userId
-    return this.watchlistService.create(userId, createDto);
+  async create(@Request() req, @Body() createDto: CreateWatchlistDto) {
+    return this.watchlistService.create(req.user.userId, req.user.email, createDto);
   }
 
   @UseGuards(JwtAuthGuard)

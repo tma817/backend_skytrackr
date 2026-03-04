@@ -7,6 +7,9 @@ export class Watchlist extends Document {
   userId: Types.ObjectId;
 
   @Prop({ required: true })
+  userEmail: string;
+
+  @Prop({ required: true })
   searchId: string;
 
   @Prop({ required: true })
