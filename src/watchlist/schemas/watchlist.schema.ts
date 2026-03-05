@@ -38,6 +38,15 @@ export class Watchlist extends Document {
 
   @Prop({ required: true, enum: ['one-way', 'round-trip'] })
   tripType: string;
+
+  @Prop()
+  airlineName: string;
+
+  @Prop()
+  airlineLogo: string;
+
+  @Prop({ default: 'CAD' })
+  currency: string;
 }
 
 export const WatchlistSchema = SchemaFactory.createForClass(Watchlist);

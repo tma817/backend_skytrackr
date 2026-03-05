@@ -165,6 +165,7 @@ export class WatchlistService {
     // No FlightSearch model needed here — return watchlist data directly
     return watchlistItems.map((item) => ({
       _id: item._id,
+      flightId: item.flightId,
       savedAt: (item as any).createdAt,
       origin: item.origin,
       destination: item.destination,
@@ -175,6 +176,9 @@ export class WatchlistService {
       status: item.status,
       passengers: item.passengers,
       tripType: item.tripType,
+      airlineName: item.airlineName,
+      airlineLogo: item.airlineLogo,
+      currency: item.currency ?? 'CAD',
     }));
   }
 

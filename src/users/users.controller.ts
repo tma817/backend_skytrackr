@@ -34,7 +34,8 @@ export class UsersController {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    return user;
+    const { password, otpCode, otpExpires, ...safe } = (user as any).toObject();
+    return safe;
   }
 
   @Patch(':email')
@@ -50,7 +51,8 @@ export class UsersController {
     if (!updatedUser) {
       throw new NotFoundException('User not found');
     }
-    return updatedUser;
+    const { password, otpCode, otpExpires, ...safe } = (updatedUser as any).toObject();
+    return safe;
   }
 
   //   @UseGuards(JwtAuthGuard)

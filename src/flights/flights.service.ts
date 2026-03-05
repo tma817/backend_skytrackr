@@ -187,12 +187,12 @@ export class FlightsService {
       if (!flight?.itineraries?.[0]?.segments?.length) return false;
 
       // Max price
-      if (maxPrice && parseFloat(flight.price.total) > maxPrice) return false;
+      if (maxPrice != null && parseFloat(flight.price.total) > Number(maxPrice)) return false;
 
       // Stops
-      if (stops !== undefined) {
+      if (stops !== undefined && stops !== null) {
         const flightStops = flight.itineraries[0].segments.length - 1;
-        if (flightStops !== stops) return false;
+        if (flightStops !== Number(stops)) return false;
       }
 
       // Airline
