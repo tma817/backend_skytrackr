@@ -218,11 +218,35 @@ export class FlightsService {
 
       return true;
     });
+
+    const seenFlights = new Set<string>();
+    const noDupedFlights = filteredFlights.filter((flight) => {
+
+    const firstSeg = flight.itineraries[0]?.segments[0];
+    const lastSeg = flight.itineraries[0]?.segments[flight.itineraries[0].segments.length - 1];
+    const returnFirstSeg = flight.itineraries[1]?.segments[0];
+    const returnLastSeg = flight.itineraries[1]?.segments[flight.itineraries[1]?.segments.length - 1];
+
+    const key = [
+        flight.validatingAirlineCodes[0],
+        firstSeg?.departure?.iataCode,
+        firstSeg?.departure?.at?.substring(0, 16),
+        lastSeg?.arrival?.at?.substring(0, 16),
+        returnFirstSeg?.departure?.at?.substring(0, 16),
+        returnLastSeg?.arrival?.at?.substring(0, 16),
+        Math.round(parseFloat(flight.price.total)),
+    ].join('-');
+
+      if (seenFlights.has(key)) return false;
+      seenFlights.add(key);
+      return true;
+    });
+
       // --- 2. PAGINATION ---
-    const total = filteredFlights.length;
+    const total = noDupedFlights.length;
     const start = (page - 1) * limit;
     const end = start + limit;
-    const pageItems = filteredFlights.slice(start, end);
+    const pageItems = noDupedFlights.slice(start, end);
 
     // --- 3. MAPPING & FORMATTING ---
     const items = await Promise.all(

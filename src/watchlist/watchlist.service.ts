@@ -170,6 +170,7 @@ export class WatchlistService {
       origin: item.origin,
       destination: item.destination,
       departureDate: item.departureDate,
+      returnDate: item.returnDate,
       initialPrice: item.initialPrice,
       currentPrice: item.currentPrice,
       priceDiff: +(item.currentPrice - item.initialPrice).toFixed(2),

@@ -30,6 +30,9 @@ export class Watchlist extends Document {
   @Prop()
   departureDate: string;
 
+  @Prop()
+  returnDate?: string;
+
   @Prop({ default: 'active' })
   status: string;
 

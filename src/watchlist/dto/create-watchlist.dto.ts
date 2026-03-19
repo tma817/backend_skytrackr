@@ -28,6 +28,11 @@ export class CreateWatchlistDto {
   @IsString()
   departureDate: string;
 
+  @ApiProperty({ example: '2026-02-22', required: false })
+  @IsOptional()
+  @IsString()
+  returnDate: string;
+
   @ApiProperty({ example: 1 })
   @Type(() => Number)
   @IsNumber()
