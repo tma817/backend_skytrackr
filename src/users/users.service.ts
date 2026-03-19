@@ -63,6 +63,11 @@ export class UsersService {
     return this.userModel.find().exec();
   }
 
+  async updatePassword(email: string, newPassword: string): Promise<void> {
+    const hashed = await this.hashPassword(newPassword);
+    await this.userModel.updateOne({ email }, { $set: { password: hashed } }).exec();
+  }
+
   async updateOtp(
     email: string,
     otpCode: string,

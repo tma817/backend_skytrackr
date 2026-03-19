@@ -343,6 +343,52 @@ export class MailService {
     }
   }
 
+  async sendPasswordResetEmail(fname: string, email: string, resetLink: string) {
+    try {
+      await this.resend.emails.send({
+        from: this.from,
+        to: email,
+        subject: 'Reset your SkyTrackr password',
+        html: `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="background:linear-gradient(135deg,#0ea5e9,#6366f1);padding:32px 40px;text-align:center;">
+              <h1 style="margin:0;color:#ffffff;font-size:28px;letter-spacing:-0.5px;">SkyTrackr</h1>
+              <p style="margin:8px 0 0;color:#e0f2fe;font-size:15px;">Password Reset</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:36px 40px;text-align:center;">
+              <h2 style="margin:0 0 8px;color:#1f2937;font-size:20px;">Hi ${fname}!</h2>
+              <p style="margin:0 0 28px;color:#6b7280;font-size:15px;">We received a request to reset your password. Click the button below — the link expires in 15 minutes.</p>
+              <a href="${resetLink}" style="display:inline-block;background:#0ea5e9;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 36px;border-radius:10px;margin-bottom:24px;">Reset Password</a>
+              <p style="margin:0;color:#9ca3af;font-size:12px;">Or copy this link into your browser:<br/><span style="color:#0ea5e9;word-break:break-all;">${resetLink}</span></p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f9fafb;padding:16px 40px;text-align:center;border-top:1px solid #e5e7eb;">
+              <p style="margin:0;font-size:12px;color:#9ca3af;">If you didn't request a password reset, you can safely ignore this email.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+      });
+      this.logger.log(`Password reset email sent to ${email}`);
+    } catch (error: any) {
+      this.logger.error('Failed to send password reset email', error.message);
+    }
+  }
+
   private formatDateTime(at: string): string {
     const d = new Date(at);
     return d.toLocaleString('en-US', {

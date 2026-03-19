@@ -143,19 +143,15 @@ export class FlightsService {
 
       const flights = response.data.data;
 
-      if (!hasExtraParams) {
-        const newFlight = await this.flightSearchModel.create({
-          origin,
-          destination,
-          departureDate,
-          returnDate,
-          adults,
-          results: flights,
-        });
-        return newFlight.toObject();
-      }
-
-      return { results: flights };
+      const newFlight = await this.flightSearchModel.create({
+        origin,
+        destination,
+        departureDate,
+        returnDate,
+        adults,
+        results: flights,
+      });
+      return newFlight.toObject();
     } catch (error: any) {
       console.error('Amadeus API Error:', error.response?.data || error.message);
 

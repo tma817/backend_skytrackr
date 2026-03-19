@@ -61,8 +61,57 @@ export class BookingsService {
       throw new NotFoundException('Flight offer not found');
     }
 
-    // 2. Call Amadeus Flight Orders API
     const token = await this.getAccessToken();
+
+    // 2. Re-fetch a fresh matching offer from Amadeus
+    let offerToBook = rawFlight;
+    try {
+      const searchRes = await firstValueFrom(
+        this.httpService.get('https://test.api.amadeus.com/v2/shopping/flight-offers', {
+          headers: { Authorization: `Bearer ${token}` },
+          params: {
+            originLocationCode: flightSearch.origin,
+            destinationLocationCode: flightSearch.destination,
+            departureDate: flightSearch.departureDate,
+            adults: flightSearch.adults,
+            ...(flightSearch.returnDate ? { returnDate: flightSearch.returnDate } : {}),
+            currencyCode: rawFlight.price?.currency ?? 'CAD',
+            max: 50,
+          },
+        }),
+      );
+
+      const freshOffers: any[] = searchRes.data.data ?? [];
+      const cachedDep = rawFlight.itineraries?.[0]?.segments?.[0]?.departure;
+      const matched = freshOffers.find((o: any) => {
+        const dep = o.itineraries?.[0]?.segments?.[0]?.departure;
+        return (
+          o.validatingAirlineCodes?.[0] === rawFlight.validatingAirlineCodes?.[0] &&
+          dep?.iataCode === cachedDep?.iataCode &&
+          dep?.at?.substring(0, 16) === cachedDep?.at?.substring(0, 16)
+        );
+      });
+
+      if (matched) offerToBook = matched;
+    } catch (refreshErr: any) {
+      console.warn('Could not refresh offer, using cached:', refreshErr.message);
+    }
+
+    // 3. Price the offer to get a confirmed bookable offer
+    try {
+      const priceRes = await firstValueFrom(
+        this.httpService.post(
+          'https://test.api.amadeus.com/v1/shopping/flight-offers/pricing',
+          { data: { type: 'flight-offers-pricing', flightOffers: [offerToBook] } },
+          { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+        ),
+      );
+      offerToBook = priceRes.data.data.flightOffers[0];
+    } catch (priceErr: any) {
+      console.warn('Could not re-price offer, using unpriced offer:', priceErr.message);
+    }
+
+    // 4. Call Amadeus Flight Orders API
     const url = 'https://test.api.amadeus.com/v1/booking/flight-orders';
 
     try {
@@ -72,7 +121,7 @@ export class BookingsService {
           {
             data: {
               type: 'flight-order',
-              flightOffers: [rawFlight],
+              flightOffers: [offerToBook],
               travelers,
               ...(seatings && seatings.length > 0 && { seatings }),
               ...(remarks && { remarks }),
@@ -97,7 +146,7 @@ export class BookingsService {
       const booking = await this.bookingModel.create({
         amadeusOrderId: order.id,
         pnr,
-        flightOffer: rawFlight,
+        flightOffer: offerToBook,
         travelers,
         seatings: seatings ?? [],
         totalPrice: rawFlight.price.total,
