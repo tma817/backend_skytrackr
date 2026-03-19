@@ -1,22 +1,37 @@
 import { Injectable, OnApplicationBootstrap } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Airline } from "./schemas/airline.schema";
+import { AirlinePolicy } from "./schemas/airline-policy.schema";
 import path from "path";
 import { Model } from "mongoose";
 import * as fs from 'fs';
-import csv from 'csv-parser'
+import csv from 'csv-parser';
+import { AIRLINE_POLICIES_SEED } from "./data/airline-policies.seed";
 
 @Injectable()
 export class AirlinesService implements OnApplicationBootstrap {
     constructor(
-        @InjectModel('Airline') private airlineModel: Model<Airline>
+        @InjectModel('Airline') private airlineModel: Model<Airline>,
+        @InjectModel('AirlinePolicy') private policyModel: Model<AirlinePolicy>,
     ){}
 
     private airlineCache: Map<string, any> = new Map();
 
     async onApplicationBootstrap() {
-        const filePath = path.join(process.cwd(), 'src/airlines/data/airlines.dat.txt')
-        await this.importIfEmpty(filePath)
+        const filePath = path.join(process.cwd(), 'src/airlines/data/airlines.dat.txt');
+        await this.importIfEmpty(filePath);
+        await this.seedPoliciesIfEmpty();
+    }
+
+    async seedPoliciesIfEmpty() {
+        const count = await this.policyModel.countDocuments();
+        if (count > 0) return;
+        try {
+            await this.policyModel.insertMany(AIRLINE_POLICIES_SEED);
+            console.log(`Seeded ${AIRLINE_POLICIES_SEED.length} airline policies.`);
+        } catch (err) {
+            console.error('Error seeding airline policies:', err.message);
+        }
     }
 
     async importIfEmpty(filePath: string)
@@ -73,6 +88,21 @@ export class AirlinesService implements OnApplicationBootstrap {
                 }
             });
     }
+    async getAllPolicies(search?: string, alliance?: string) {
+        const filter: any = {};
+        if (alliance && alliance !== 'All') filter.alliance = alliance;
+        if (search) filter.$or = [
+            { name: { $regex: search, $options: 'i' } },
+            { iata: { $regex: search, $options: 'i' } },
+            { country: { $regex: search, $options: 'i' } },
+        ];
+        return this.policyModel.find(filter).lean();
+    }
+
+    async getPolicyByIata(iata: string) {
+        return this.policyModel.findOne({ iata: iata.toUpperCase() }).lean();
+    }
+
     async getAirlineByIata(iataCode: string) {
         if (!iataCode) return null;
         if (this.airlineCache.has(iataCode)) {

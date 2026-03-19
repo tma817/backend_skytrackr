@@ -5,6 +5,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { Watchlist } from './schemas/watchlist.schema';
+import { PriceHistory } from './schemas/price-history.schema';
 import { CreateWatchlistDto } from './dto/create-watchlist.dto';
 import { AirlinesService } from 'src/airlines/airlines.service';
 import { MailService } from 'src/mail/mail.service';
@@ -17,6 +18,7 @@ export class WatchlistService {
 
   constructor(
     @InjectModel(Watchlist.name) private watchlistModel: Model<Watchlist>,
+    @InjectModel(PriceHistory.name) private priceHistoryModel: Model<PriceHistory>,
     private readonly httpService: HttpService,
     private readonly airlinesService: AirlinesService,
     private readonly mailService: MailService,
@@ -102,6 +104,22 @@ export class WatchlistService {
       );
 
       if (newPrice === null) continue;
+
+      // Persist price snapshot for AI prediction history
+      const departure = new Date(item.departureDate);
+      const today2 = new Date();
+      const daysUntilFlight = Math.ceil(
+        (departure.getTime() - today2.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      await this.priceHistoryModel.create({
+        origin: item.origin,
+        destination: item.destination,
+        departureDate: item.departureDate,
+        price: newPrice,
+        currency: item.currency ?? 'CAD',
+        daysUntilFlight,
+        recordedAt: new Date(),
+      });
 
       const update: any = { currentPrice: newPrice };
 

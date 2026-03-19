@@ -11,6 +11,7 @@ import { FlightsModule } from './flights/flights.module';
 import { AirlinesModule } from './airlines/airlines.module';
 import { WatchlistModule } from './watchlist/watchlist.module';
 import { BookingsModule } from './bookings/bookings.module';
+import { PredictionModule } from './prediction/prediction.module';
 
 
 
@@ -39,6 +40,7 @@ import { BookingsModule } from './bookings/bookings.module';
     AirlinesModule,
     WatchlistModule,
     BookingsModule,
+    PredictionModule,
   ],
   controllers: [AppController],
   providers: [AppService],
