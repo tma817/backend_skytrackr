@@ -10,5 +10,6 @@ import { Airport, AirportSchema } from './schemas/airport.schema';
   ],
   controllers: [AirportsController],
   providers: [AirportsService],
+  exports: [AirportsService],
 })
 export class AirportsModule {}

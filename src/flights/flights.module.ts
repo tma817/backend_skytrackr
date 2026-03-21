@@ -7,6 +7,7 @@ import { FlightSearch, FlightSearchSchema } from './schemas/flight.schema';
 import { PriceGrid, PriceGridSchema } from './schemas/price-grid.schema';
 import { AirlinesService } from 'src/airlines/airlines.service';
 import { AirlinesModule } from 'src/airlines/airlines.module';
+import { AirportsModule } from 'src/airports/airports.module';
 
 @Module({
   imports: [
@@ -15,7 +16,8 @@ import { AirlinesModule } from 'src/airlines/airlines.module';
       { name: FlightSearch.name, schema: FlightSearchSchema },
       { name: PriceGrid.name, schema: PriceGridSchema },
     ]),
-    AirlinesModule
+    AirlinesModule,
+    AirportsModule,
   ],
   controllers: [FlightsController],
   providers: [FlightsService],

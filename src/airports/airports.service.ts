@@ -58,8 +58,15 @@ export class AirportsService implements OnApplicationBootstrap{
             });
     }
 
+    async getByIata(iata: string): Promise<{ city: string; name: string } | null> {
+        return this.airportModel
+            .findOne({ iata: iata.toUpperCase() }, { city: 1, name: 1, _id: 0 })
+            .lean();
+    }
+
     async suggestAirports(term: string) {
-        const regex = new RegExp(`^${term}`, 'i');
+        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`^${escaped}`, 'i');
 
         return this.airportModel.aggregate([
             {
