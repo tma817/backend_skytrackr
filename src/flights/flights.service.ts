@@ -11,11 +11,14 @@ import { PriceGrid } from './schemas/price-grid.schema';
 import { Model } from 'mongoose';
 import { SearchFlightsDto } from './dto/search-flights.dto';
 import { AirlinesService } from 'src/airlines/airlines.service';
+import { AirportsService } from 'src/airports/airports.service';
+import Anthropic from '@anthropic-ai/sdk';
 
 @Injectable()
 export class FlightsService {
   private accessToken: string = '';
   private tokenExpiry: number = 0;
+  private readonly anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   constructor(
     private readonly httpService: HttpService,
@@ -24,6 +27,7 @@ export class FlightsService {
     @InjectModel(PriceGrid.name)
     private priceGridModel: Model<PriceGrid>,
     private airlineService: AirlinesService,
+    private airportsService: AirportsService,
   ) {}
 
   private async getAccessToken() {
@@ -103,7 +107,7 @@ export class FlightsService {
           .findOne({ origin, destination, departureDate, returnDate, adults })
           .lean();
 
-        if (cachedSearch && cachedSearch.results) {
+        if (cachedSearch && cachedSearch.results?.length > 0) {
           return cachedSearch;
         }
       } catch (error: any) {
@@ -140,9 +144,7 @@ export class FlightsService {
           params: queryParams,
         }),
       );
-
       const flights = response.data.data;
-
       const newFlight = await this.flightSearchModel.create({
         origin,
         destination,
@@ -153,10 +155,15 @@ export class FlightsService {
       });
       return newFlight.toObject();
     } catch (error: any) {
-      console.error('Amadeus API Error:', error.response?.data || error.message);
+      const status = error.response?.status;
+      const amadeusError = error.response?.data?.errors?.[0];
+      console.error(`Amadeus API Error [${status}]:`, amadeusError || error.response?.data || error.message);
 
-      if (error.response?.status === 400) {
-        throw new BadRequestException('Invalid flight search parameters');
+      if (status === 429) {
+        throw new BadRequestException('Amadeus rate limit reached — please wait a moment and try again');
+      }
+      if (status === 400) {
+        throw new BadRequestException(amadeusError?.detail || 'Invalid flight search parameters');
       }
 
       throw new Error('Could not fetch flights from Amadeus');
@@ -241,12 +248,12 @@ export class FlightsService {
           numberOfBookableSeats: flight.numberOfBookableSeats ?? null,
           lastTicketingDate: flight.lastTicketingDate ?? null,
           refundable: flight.pricingOptions?.refundableFare ?? false,
-          itineraries: flight.itineraries.map((it, index) => ({
+          itineraries: await Promise.all(flight.itineraries.map(async (it, index) => ({
             type: index === 0 ? 'outbound' : 'inbound',
             duration: this.formatDuration(it.duration),
             stops: it.segments.length - 1,
-            departure: this.formatEndPoint(it.segments[0].departure),
-            arrival: this.formatEndPoint(it.segments[it.segments.length - 1].arrival),
+            departure: await this.formatEndPoint(it.segments[0].departure),
+            arrival: await this.formatEndPoint(it.segments[it.segments.length - 1].arrival),
             segments: it.segments.map((s, sIdx) => {
               const segmentData: any = this.mapSegment(s);
               if (sIdx < it.segments.length - 1) {
@@ -257,7 +264,7 @@ export class FlightsService {
               }
               return segmentData;
             }),
-          })),
+          }))),
           cabin: flight.travelerPricings?.[0]?.fareDetailsBySegment[0]?.cabin,
           baggage: {
             checked: flight.travelerPricings?.[0]?.fareDetailsBySegment[0]?.includedCheckedBags?.quantity || 0,
@@ -361,18 +368,18 @@ export class FlightsService {
             amount: parseFloat(f.amount),
           })),
         },
-        itineraries: confirmed.itineraries.map((it: any, index: number) => ({
+        itineraries: await Promise.all(confirmed.itineraries.map(async (it: any, index: number) => ({
           type: index === 0 ? 'outbound' : 'inbound',
           duration: it.duration ? this.formatDuration(it.duration) : '',
-          segments: it.segments.map((s: any) => ({
-            departure: this.formatEndPoint(s.departure),
-            arrival: this.formatEndPoint(s.arrival),
+          segments: await Promise.all(it.segments.map(async (s: any) => ({
+            departure: await this.formatEndPoint(s.departure),
+            arrival: await this.formatEndPoint(s.arrival),
             carrierCode: s.carrierCode,
             flightNumber: s.number,
             aircraft: s.aircraft?.code ?? '',
             duration: s.duration ? this.formatDuration(s.duration) : '',
-          })),
-        })),
+          }))),
+        }))),
         travelerPricings: (confirmed.travelerPricings ?? []).map((tp: any) => ({
           travelerId: tp.travelerId,
           fareOption: tp.fareOption,
@@ -421,10 +428,48 @@ export class FlightsService {
     }
 
     const rawFlight = flightSearch.results.find((f: any) => String(f.id) === String(flightId));
-    console.log(rawFlight)
     if (!rawFlight) {
       throw new NotFoundException('Flight not found');
     }
+
+    // Strip ALL Mongoose _id/__v fields recursively and sanitize mandatory fields
+    const deepClean = (obj: any): any => {
+      if (Array.isArray(obj)) return obj.map(deepClean);
+      if (obj && typeof obj === 'object') {
+        const result: any = {};
+        for (const key of Object.keys(obj)) {
+          if (key === '_id' || key === '__v') continue;
+          result[key] = deepClean(obj[key]);
+        }
+        return result;
+      }
+      return obj;
+    };
+
+    const sanitizeFlight = (f: any) => {
+      const cleaned = deepClean(JSON.parse(JSON.stringify(f)));
+
+      // fareBasis is mandatory for seatmaps — default to empty string if missing
+      if (Array.isArray(cleaned.travelerPricings)) {
+        cleaned.travelerPricings = cleaned.travelerPricings.map((tp: any) => {
+          if (Array.isArray(tp.fareDetailsBySegment)) {
+            tp.fareDetailsBySegment = tp.fareDetailsBySegment.map((fd: any) => {
+              if (!fd.fareBasis) fd.fareBasis = '';
+              return fd;
+            });
+          }
+          return tp;
+        });
+      }
+
+      return cleaned;
+    };
+
+    const flightOffer = sanitizeFlight(rawFlight);
+    const { travelerPricings, itineraries, ...topLevel } = flightOffer;
+    console.log('SeatMap top-level fields:', JSON.stringify(topLevel, null, 2));
+    console.log('SeatMap itinerary segment[0]:', JSON.stringify(itineraries?.[0]?.segments?.[0], null, 2));
+    console.log('SeatMap fareDetails[0]:', JSON.stringify(travelerPricings?.[0]?.fareDetailsBySegment?.[0], null, 2));
 
     const token = await this.getAccessToken();
     const url = 'https://test.api.amadeus.com/v1/shopping/seatmaps';
@@ -433,7 +478,7 @@ export class FlightsService {
       const response = await firstValueFrom(
         this.httpService.post(
           url,
-          { data: [rawFlight] },
+          { data: [flightOffer] },
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -445,7 +490,7 @@ export class FlightsService {
 
       return response.data.data;
     } catch (error: any) {
-      console.error('SeatMap API Error:', error.response?.data || error.message);
+      console.error('SeatMap API Error:', JSON.stringify(error.response?.data, null, 2) || error.message);
       throw new BadRequestException(
         error.response?.data?.errors?.[0]?.detail || 'Could not fetch seat map',
       );
@@ -478,16 +523,16 @@ export class FlightsService {
         amount: parseFloat(rawFlight.price.total),
         currency: rawFlight.price.currency,
       },
-      itineraries: rawFlight.itineraries.map((it, index) => ({
+      itineraries: await Promise.all(rawFlight.itineraries.map(async (it, index) => ({
         type: index === 0 ? 'outbound' : 'inbound',
         duration: this.formatDuration(it.duration),
         stops: it.segments.length - 1,
-        departure: this.formatEndPoint(it.segments[0].departure),
-        arrival: this.formatEndPoint(it.segments[it.segments.length - 1].arrival),
-        segments: it.segments.map((s, sIdx) => {
+        departure: await this.formatEndPoint(it.segments[0].departure),
+        arrival: await this.formatEndPoint(it.segments[it.segments.length - 1].arrival),
+        segments: await Promise.all(it.segments.map(async (s, sIdx) => {
           const segmentData: any = {
-            departure: this.formatEndPoint(s.departure), 
-            arrival: this.formatEndPoint(s.arrival),     
+            departure: await this.formatEndPoint(s.departure),
+            arrival: await this.formatEndPoint(s.arrival),
             carrierCode: s.carrierCode,
             flightNumber: s.number,
             aircraft: s.aircraft.code,
@@ -501,8 +546,8 @@ export class FlightsService {
             );
           }
           return segmentData;
-        }),
-      })),
+        })),
+      }))),
       cabin: rawFlight.travelerPricings?.[0]?.fareDetailsBySegment[0]?.cabin,
       baggage: {
         checked: rawFlight.travelerPricings?.[0]?.fareDetailsBySegment[0]?.includedCheckedBags?.quantity || 0,
@@ -615,6 +660,140 @@ export class FlightsService {
     };
   }
 
+  // ─── PRICE ANALYSIS ────────────────────────────────────────────────────────
+
+  async getPriceAnalysis(params: {
+    origin: string;
+    destination: string;
+    departureDate: string;
+    currentPrice: number;
+    currency?: string;
+    oneWay?: boolean;
+  }) {
+    const { origin, destination, departureDate, currentPrice, currency = 'CAD', oneWay = true } = params;
+
+    const today = new Date();
+    const dep = new Date(departureDate + 'T00:00:00');
+    const daysUntil = Math.ceil((dep.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Fetch price grid (uses cache if available, otherwise fetches from Amadeus)
+    let priceMetrics: { minimum: number; median: number; maximum: number } | null = null;
+    let percentile: number | null = null;
+
+    try {
+      const gridResult = await this.getPriceGrid({ origin, destination, departureDate, currency, oneWay });
+      const prices = gridResult.data
+        .map((d) => d.price)
+        .filter((p) => p > 0)
+        .sort((a, b) => a - b);
+
+      if (prices.length >= 2) {
+        const minimum = prices[0];
+        const maximum = prices[prices.length - 1];
+        const mid = Math.floor(prices.length / 2);
+        const median =
+          prices.length % 2 === 0
+            ? (prices[mid - 1] + prices[mid]) / 2
+            : prices[mid];
+
+        priceMetrics = { minimum, median, maximum };
+
+        if (maximum >= minimum) {
+          percentile = Math.round(((currentPrice - minimum) / (maximum - minimum)) * 100);
+          percentile = Math.max(0, Math.min(100, percentile));
+        }
+      }
+    } catch {
+      // Grid fetch failed — proceed with timing-only verdict
+    }
+
+    console.log(`[PriceAnalysis] priceMetrics=${JSON.stringify(priceMetrics)} percentile=${percentile}`);
+
+    // ── AI verdict when price grid data is available ──────────────────────────
+    if (priceMetrics && percentile !== null && daysUntil > 0) {
+      try {
+        const prompt = `You are a flight price analyst. Give a clear buy/wait recommendation based on the data below.
+          ROUTE: ${origin} → ${destination}
+          DEPARTURE: ${departureDate} (${daysUntil} days from today)
+          CURRENT PRICE: ${currentPrice} ${currency}
+
+          NEARBY DATES PRICE RANGE (cheapest available flight per day, same route):
+          - Lowest nearby price:  ${priceMetrics.minimum} ${currency}
+          - Median nearby price:  ${priceMetrics.median} ${currency}
+          - Highest nearby price: ${priceMetrics.maximum} ${currency}
+          - This price is at the ${percentile}th percentile (0 = cheapest, 100 = most expensive)
+
+          Rules to consider:
+          - Airline prices almost always rise within 3 weeks of departure.
+          - A price below the median is generally a good deal.
+          - If the price is above the 70th percentile AND departure is more than 2 weeks away, waiting may help.
+          - If departure is within 7 days, always recommend buying now.
+
+          Respond ONLY with a valid JSON object, no other text:
+          {
+            "verdict": "buy_now" | "wait" | "uncertain",
+            "verdictReason": "<1-2 sentence plain English explanation for a traveller>"
+          }`;
+
+        console.log(`[PriceAnalysis] Calling Claude for ${origin}→${destination} | price=${currentPrice} ${currency} | percentile=${percentile} | daysUntil=${daysUntil}`);
+
+        const response = await this.anthropic.messages.create({
+          model: 'claude-haiku-4-5',
+          max_tokens: 256,
+          messages: [{ role: 'user', content: prompt }],
+        });
+
+        const textBlock = response.content.find((b) => b.type === 'text');
+        const raw = textBlock && textBlock.type === 'text' ? textBlock.text.trim() : '';
+        console.log(`[PriceAnalysis] Claude raw response: ${raw}`);
+
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.verdict && parsed.verdictReason) {
+            console.log(`[PriceAnalysis] Claude verdict: ${parsed.verdict} — ${parsed.verdictReason}`);
+            return {
+              origin, destination, departureDate, currency, currentPrice, daysUntil, percentile,
+              priceMetrics,
+              verdict: parsed.verdict,
+              verdictReason: parsed.verdictReason,
+            };
+          }
+        }
+        console.warn('[PriceAnalysis] Could not parse Claude response, falling back to rules');
+      } catch (err: any) {
+        console.error(`[PriceAnalysis] Claude call failed: ${err.message} — falling back to rules`);
+      }
+    }
+
+    // ── Rule-based fallback (no price grid data or AI failed) ─────────────────
+    let verdict: 'buy_now' | 'wait' | 'uncertain';
+    let verdictReason: string;
+
+    if (daysUntil <= 0) {
+      verdict = 'buy_now';
+      verdictReason = 'Departure is today or has passed.';
+    } else if (daysUntil <= 7) {
+      verdict = 'buy_now';
+      verdictReason = 'Departure is within a week — prices rarely drop this close to the date.';
+    } else if (daysUntil <= 21) {
+      verdict = 'buy_now';
+      verdictReason = 'Under 3 weeks to departure — flight prices typically increase in this window.';
+    } else if (daysUntil <= 45) {
+      verdict = 'buy_now';
+      verdictReason = 'Within 6 weeks of departure prices usually start climbing. Booking now is generally advisable.';
+    } else {
+      verdict = 'wait';
+      verdictReason = 'Departure is still far out. Prices may drop — consider checking back in a few weeks.';
+    }
+
+    return {
+      origin, destination, departureDate, currency, currentPrice, daysUntil, percentile,
+      priceMetrics,
+      verdict, verdictReason,
+    };
+  }
+
   private buildDateWindow(center: string, days: number): string[] {
     const result: string[] = [];
     const half = Math.floor(days / 2);
@@ -633,12 +812,15 @@ export class FlightsService {
     return d.replace('PT', '').replace('H', 'h ').replace('M', 'm').toLowerCase();
   }
 
-  private formatEndPoint(ep: any) {
+  private async formatEndPoint(ep: any) {
+    const airport = await this.airportsService.getByIata(ep.iataCode).catch(() => null);
     return {
       time: ep.at.split('T')[1].substring(0, 5),
       date: ep.at.split('T')[0],
       iataCode: ep.iataCode,
       terminal: ep.terminal,
+      cityName: airport?.city ?? null,
+      airportName: airport?.name ?? null,
     };
   }
 

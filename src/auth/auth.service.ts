@@ -86,7 +86,9 @@ export class AuthService {
   }
 
   async forgotPassword(email: string): Promise<{ message: string }> {
+    console.log(email)
     const user = await this.usersService.findOne(email);
+    console.log(user)
     // Always return the same message to prevent email enumeration
     if (!user) return { message: 'If that email exists, a reset link has been sent.' };
 

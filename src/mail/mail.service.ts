@@ -57,11 +57,19 @@ export class MailService {
 
     const travelersHtml = booking.travelers
       .map(
-        (t) => `
+        (t, idx) => `
         <tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;">${t.name?.firstName} ${t.name?.lastName}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;">${t.travelerType ?? '–'}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;">${t.contact?.emailAddress ?? '–'}</td>
+          <td style="padding:10px 0;border-bottom:1px solid #2a2a2a;">
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="width:28px;height:28px;background:#2a2a2a;border-radius:50%;text-align:center;vertical-align:middle;font-size:11px;font-weight:700;color:#9ca3af;">${idx + 1}</td>
+                <td style="padding-left:12px;">
+                  <p style="margin:0;font-size:13px;font-weight:700;color:#ffffff;text-transform:uppercase;">${t.name?.firstName} ${t.name?.lastName}</p>
+                  <p style="margin:2px 0 0;font-size:11px;color:#6b7280;">${t.contact?.emailAddress ?? '–'}</p>
+                </td>
+              </tr>
+            </table>
+          </td>
         </tr>`,
       )
       .join('');
@@ -69,50 +77,84 @@ export class MailService {
     const itinerariesHtml = flightOffer?.itineraries
       ?.map((it: any, idx: number) => {
         const label = idx === 0 ? 'Outbound' : 'Return';
+        const firstSeg = it.segments[0];
+        const lastSeg = it.segments[it.segments.length - 1];
+
         const segmentsHtml = it.segments
           .map((s: any, sIdx: number) => {
             const seat = booking.seatings?.find(
               (seat) => seat.segmentId === s.id && seat.travelerId === '1',
             );
-            const layoverHtml =
-              sIdx < it.segments.length - 1
-                ? `<tr><td colspan="4" style="padding:4px 12px;background:#fff8e1;font-size:12px;color:#f59e0b;text-align:center;">
-                     Layover at ${s.arrival.iataCode}
-                   </td></tr>`
-                : '';
+            const isLast = sIdx === it.segments.length - 1;
             return `
               <tr>
-                <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;">
-                  <strong>${s.departure.iataCode}</strong>${s.departure.terminal ? ` T${s.departure.terminal}` : ''}<br/>
-                  <span style="color:#6b7280;font-size:13px;">${this.formatDateTime(s.departure.at)}</span>
-                </td>
-                <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;text-align:center;">→</td>
-                <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;">
-                  <strong>${s.arrival.iataCode}</strong>${s.arrival.terminal ? ` T${s.arrival.terminal}` : ''}<br/>
-                  <span style="color:#6b7280;font-size:13px;">${this.formatDateTime(s.arrival.at)}</span>
-                </td>
-                <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;font-size:13px;color:#374151;">
-                  ${s.carrierCode}${s.number}<br/>
-                  ${this.formatDuration(s.duration)}
-                  ${seat ? `<br/>Seat: <strong>${seat.seatNumber}</strong>` : ''}
+                <td style="padding:10px 0;${!isLast ? 'border-bottom:1px dashed #2a2a2a;' : ''}">
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td style="width:33%;">
+                        <p style="margin:0;font-size:16px;font-weight:800;color:#ffffff;">${s.departure.iataCode}</p>
+                        <p style="margin:2px 0 0;font-size:11px;color:#6b7280;">${this.formatDateTime(s.departure.at)}</p>
+                        ${s.departure.terminal ? `<p style="margin:1px 0 0;font-size:10px;color:#4b5563;">T${s.departure.terminal}</p>` : ''}
+                      </td>
+                      <td style="width:33%;text-align:center;">
+                        <p style="margin:0;font-size:10px;font-weight:600;color:#6b7280;">${this.formatDuration(s.duration)}</p>
+                        <p style="margin:4px 0;font-size:1px;color:#3a3a3a;">───────</p>
+                        <p style="margin:0;font-size:10px;font-weight:700;color:#9ca3af;letter-spacing:1px;">${s.carrierCode}${s.number}${seat ? ` · <span style="color:#ffffff;">Seat ${seat.seatNumber}</span>` : ''}</p>
+                      </td>
+                      <td style="width:33%;text-align:right;">
+                        <p style="margin:0;font-size:16px;font-weight:800;color:#ffffff;">${s.arrival.iataCode}</p>
+                        <p style="margin:2px 0 0;font-size:11px;color:#6b7280;">${this.formatDateTime(s.arrival.at)}</p>
+                        ${s.arrival.terminal ? `<p style="margin:1px 0 0;font-size:10px;color:#4b5563;">T${s.arrival.terminal}</p>` : ''}
+                      </td>
+                    </tr>
+                  </table>
                 </td>
               </tr>
-              ${layoverHtml}`;
+              ${!isLast ? `<tr><td style="padding:4px 0;text-align:center;font-size:11px;color:#4b5563;">Layover at ${s.arrival.iataCode}</td></tr>` : ''}`;
           })
           .join('');
 
         return `
-          <h3 style="margin:24px 0 8px;color:#1f2937;">${label} Flight</h3>
-          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
-            <thead>
-              <tr style="background:#f9fafb;">
-                <th style="padding:10px 12px;text-align:left;font-size:13px;color:#6b7280;">Departure</th>
-                <th style="padding:10px 12px;"></th>
-                <th style="padding:10px 12px;text-align:left;font-size:13px;color:#6b7280;">Arrival</th>
-                <th style="padding:10px 12px;text-align:left;font-size:13px;color:#6b7280;">Flight</th>
-              </tr>
-            </thead>
-            <tbody>${segmentsHtml}</tbody>
+          <!-- Itinerary ${idx + 1} -->
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;background:#1a1a1a;border-radius:12px;overflow:hidden;">
+            <tr>
+              <td style="padding:12px 16px;background:#222222;border-bottom:1px solid #2a2a2a;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td>
+                      <span style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:2px;">${label}</span>
+                    </td>
+                    <td style="text-align:right;">
+                      <span style="font-size:10px;font-weight:700;color:#6b7280;">${this.formatDuration(it.duration)} total</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:4px 16px 12px;">
+                <!-- Route overview -->
+                <table width="100%" cellpadding="0" cellspacing="0" style="padding:12px 0;border-bottom:1px solid #2a2a2a;">
+                  <tr>
+                    <td>
+                      <p style="margin:0;font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">${firstSeg?.departure?.iataCode ?? '–'}</p>
+                      <p style="margin:2px 0 0;font-size:10px;color:#6b7280;">${firstSeg?.departure?.at ? new Date(firstSeg.departure.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</p>
+                    </td>
+                    <td style="text-align:center;">
+                      <p style="margin:0;font-size:18px;color:#3a3a3a;">→</p>
+                    </td>
+                    <td style="text-align:right;">
+                      <p style="margin:0;font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">${lastSeg?.arrival?.iataCode ?? '–'}</p>
+                      <p style="margin:2px 0 0;font-size:10px;color:#6b7280;">${lastSeg?.arrival?.at ? new Date(lastSeg.arrival.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</p>
+                    </td>
+                  </tr>
+                </table>
+                <!-- Segments -->
+                <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;">
+                  ${segmentsHtml}
+                </table>
+              </td>
+            </tr>
           </table>`;
       })
       .join('') ?? '';
@@ -120,46 +162,51 @@ export class MailService {
     return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
-<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 0;">
+<body style="margin:0;padding:0;background:#111111;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#111111;padding:40px 0;">
     <tr>
       <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:#161616;border-radius:16px;overflow:hidden;">
 
           <!-- Header -->
           <tr>
-            <td style="background:linear-gradient(135deg,#0ea5e9,#6366f1);padding:32px 40px;text-align:center;">
-              <h1 style="margin:0;color:#ffffff;font-size:28px;letter-spacing:-0.5px;">SkyTrackr</h1>
-              <p style="margin:8px 0 0;color:#e0f2fe;font-size:15px;">Your booking is confirmed!</p>
+            <td style="background:#000000;padding:28px 32px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td>
+                    <p style="margin:0;font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">SkyTrackr</p>
+                  </td>
+                  <td style="text-align:right;">
+                    <span style="display:inline-block;padding:4px 12px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:99px;font-size:11px;font-weight:700;color:#22c55e;letter-spacing:1px;text-transform:uppercase;">${booking.status}</span>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 
           <!-- Body -->
           <tr>
-            <td style="padding:32px 40px;">
+            <td style="padding:28px 32px;">
 
-              <!-- PNR hero block -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;margin-bottom:24px;">
+              <!-- PNR -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#000000;border-radius:12px;margin-bottom:24px;overflow:hidden;">
                 <tr>
-                  <td style="padding:20px 24px;text-align:center;">
-                    <p style="margin:0 0 4px;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Your Booking Reference (PNR)</p>
-                    <p style="margin:0;font-size:36px;font-weight:800;color:#0ea5e9;letter-spacing:6px;font-family:monospace;">${booking.pnr || '–'}</p>
-                    <p style="margin:6px 0 0;font-size:12px;color:#6b7280;">Use this code + your last name to track your booking</p>
+                  <td style="padding:20px 24px;">
+                    <p style="margin:0 0 6px;font-size:10px;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:2px;">Booking Reference (PNR)</p>
+                    <p style="margin:0;font-size:32px;font-weight:800;color:#ffffff;letter-spacing:8px;font-family:monospace;">${booking.pnr || '–'}</p>
+                    <p style="margin:8px 0 0;font-size:11px;color:#4b5563;">Use this code + your last name to track your booking</p>
                   </td>
-                  <td style="padding:20px 24px;text-align:right;border-left:1px solid #bae6fd;">
-                    <p style="margin:0 0 4px;font-size:12px;color:#6b7280;">Order ID</p>
-                    <p style="margin:0;font-size:12px;font-weight:600;color:#374151;font-family:monospace;">${booking.amadeusOrderId}</p>
-                    <span style="display:inline-block;margin-top:8px;padding:3px 10px;background:#dcfce7;color:#16a34a;border-radius:99px;font-size:12px;font-weight:600;">
-                      ${booking.status}
-                    </span>
+                  <td style="padding:20px 24px;text-align:right;border-left:1px solid #1f1f1f;">
+                    <p style="margin:0 0 4px;font-size:10px;color:#4b5563;text-transform:uppercase;letter-spacing:1px;">Order ID</p>
+                    <p style="margin:0;font-size:11px;font-weight:600;color:#6b7280;font-family:monospace;">${booking.amadeusOrderId}</p>
                   </td>
                 </tr>
               </table>
 
-              <!-- Track your booking -->
+              <!-- Track button -->
               <div style="text-align:center;margin-bottom:28px;">
                 <a href="${process.env.FRONTEND_URL ?? '#'}/booking/track?pnr=${booking.pnr ?? ''}"
-                   style="display:inline-block;padding:12px 28px;background:#6366f1;color:#ffffff;border-radius:8px;font-size:15px;font-weight:600;text-decoration:none;">
+                   style="display:inline-block;padding:13px 32px;background:#ffffff;color:#000000;border-radius:10px;font-size:14px;font-weight:700;text-decoration:none;letter-spacing:0.5px;">
                   Track Your Booking
                 </a>
               </div>
@@ -167,25 +214,31 @@ export class MailService {
               <!-- Itineraries -->
               ${itinerariesHtml}
 
-              <!-- Travelers -->
-              <h3 style="margin:28px 0 8px;color:#1f2937;">Passengers</h3>
-              <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
-                <thead>
-                  <tr style="background:#f9fafb;">
-                    <th style="padding:10px 12px;text-align:left;font-size:13px;color:#6b7280;">Name</th>
-                    <th style="padding:10px 12px;text-align:left;font-size:13px;color:#6b7280;">Type</th>
-                    <th style="padding:10px 12px;text-align:left;font-size:13px;color:#6b7280;">Email</th>
-                  </tr>
-                </thead>
-                <tbody>${travelersHtml}</tbody>
+              <!-- Passengers -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#1a1a1a;border-radius:12px;margin-bottom:16px;overflow:hidden;">
+                <tr>
+                  <td style="padding:12px 16px;background:#222222;border-bottom:1px solid #2a2a2a;">
+                    <span style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:2px;">Passengers</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 16px 12px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;">
+                      ${travelersHtml}
+                    </table>
+                  </td>
+                </tr>
               </table>
 
-              <!-- Price summary -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
-                <tr style="background:#f9fafb;">
-                  <td style="padding:14px 20px;font-size:15px;color:#374151;">Total Price</td>
-                  <td style="padding:14px 20px;text-align:right;font-size:20px;font-weight:700;color:#1f2937;">
-                    ${booking.currency} ${parseFloat(booking.totalPrice).toFixed(2)}
+              <!-- Total -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#000000;border-radius:12px;overflow:hidden;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <p style="margin:0;font-size:10px;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:2px;">Total Charged</p>
+                    <p style="margin:4px 0 0;font-size:10px;color:#374151;">All taxes included</p>
+                  </td>
+                  <td style="padding:16px 20px;text-align:right;">
+                    <p style="margin:0;font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">${booking.currency} ${parseFloat(booking.totalPrice).toFixed(2)}</p>
                   </td>
                 </tr>
               </table>
@@ -195,9 +248,9 @@ export class MailService {
 
           <!-- Footer -->
           <tr>
-            <td style="background:#f9fafb;padding:20px 40px;text-align:center;border-top:1px solid #e5e7eb;">
-              <p style="margin:0;font-size:13px;color:#9ca3af;">
-                Questions? Reply to this email or visit <a href="${process.env.FRONTEND_URL ?? '#'}" style="color:#6366f1;">SkyTrackr</a>
+            <td style="background:#0a0a0a;padding:20px 32px;text-align:center;border-top:1px solid #1f1f1f;">
+              <p style="margin:0;font-size:12px;color:#4b5563;">
+                Questions? Visit <a href="${process.env.FRONTEND_URL ?? '#'}" style="color:#9ca3af;text-decoration:none;font-weight:600;">SkyTrackr</a>
               </p>
             </td>
           </tr>
@@ -232,56 +285,69 @@ export class MailService {
         html: `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"/></head>
-<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 0;">
+<body style="margin:0;padding:0;background:#111111;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#111111;padding:40px 0;">
     <tr>
       <td align="center">
-        <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <table width="520" cellpadding="0" cellspacing="0" style="background:#161616;border-radius:16px;overflow:hidden;">
+
+          <!-- Header -->
           <tr>
-            <td style="background:linear-gradient(135deg,#10b981,#0ea5e9);padding:32px 40px;text-align:center;">
-              <h1 style="margin:0;color:#ffffff;font-size:28px;letter-spacing:-0.5px;">SkyTrackr</h1>
-              <p style="margin:8px 0 0;color:#d1fae5;font-size:15px;">Price Drop Alert</p>
+            <td style="background:#000000;padding:28px 32px;text-align:center;">
+              <p style="margin:0 0 6px;font-size:18px;font-weight:800;color:#ffffff;">SkyTrackr</p>
+              <p style="margin:0;font-size:11px;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:2px;">Price Drop Alert</p>
             </td>
           </tr>
-          <tr>
-            <td style="padding:32px 40px;text-align:center;">
-              <p style="margin:0 0 4px;font-size:16px;color:#374151;">
-                <strong>${origin}</strong> &rarr; <strong>${destination}</strong>
-              </p>
-              <p style="margin:0 0 24px;font-size:14px;color:#6b7280;">Departing ${departureDate}</p>
 
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px;">
+
+              <!-- Route -->
+              <p style="margin:0 0 4px;font-size:22px;font-weight:800;color:#ffffff;text-align:center;letter-spacing:-0.5px;">${origin} → ${destination}</p>
+              <p style="margin:0 0 28px;font-size:12px;color:#6b7280;text-align:center;">Departing ${departureDate}</p>
+
+              <!-- Price comparison -->
               <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
                 <tr>
-                  <td style="text-align:center;padding:16px;background:#f9fafb;border-radius:8px 0 0 8px;border:1px solid #e5e7eb;">
-                    <p style="margin:0 0 4px;font-size:12px;color:#9ca3af;text-transform:uppercase;">Was</p>
-                    <p style="margin:0;font-size:20px;font-weight:600;color:#6b7280;text-decoration:line-through;">${currency} ${initialPrice.toFixed(2)}</p>
+                  <td style="width:50%;padding:16px;background:#1a1a1a;border-radius:10px 0 0 10px;text-align:center;">
+                    <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:1px;">Was</p>
+                    <p style="margin:0;font-size:18px;font-weight:600;color:#4b5563;text-decoration:line-through;">${currency} ${initialPrice.toFixed(2)}</p>
                   </td>
-                  <td style="text-align:center;padding:16px;background:#ecfdf5;border-radius:0 8px 8px 0;border:1px solid #6ee7b7;">
-                    <p style="margin:0 0 4px;font-size:12px;color:#10b981;text-transform:uppercase;">Now</p>
-                    <p style="margin:0;font-size:28px;font-weight:800;color:#059669;">${currency} ${currentPrice.toFixed(2)}</p>
+                  <td style="width:50%;padding:16px;background:#222222;border-radius:0 10px 10px 0;text-align:center;">
+                    <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:1px;">Now</p>
+                    <p style="margin:0;font-size:26px;font-weight:800;color:#ffffff;">${currency} ${currentPrice.toFixed(2)}</p>
                   </td>
                 </tr>
               </table>
 
-              <div style="display:inline-block;background:#dcfce7;border-radius:99px;padding:8px 20px;margin-bottom:28px;">
-                <span style="font-size:15px;font-weight:700;color:#16a34a;">You save ${currency} ${saving} (${pct}% off)</span>
+              <!-- Saving badge -->
+              <div style="text-align:center;margin-bottom:28px;">
+                <span style="display:inline-block;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:99px;padding:8px 20px;font-size:13px;font-weight:700;color:#22c55e;">
+                  Save ${currency} ${saving} — ${pct}% off
+                </span>
               </div>
 
-              <br/>
-              <a href="${process.env.FRONTEND_URL ?? '#'}/watchlist/${watchlistId}"
-                 style="display:inline-block;padding:12px 32px;background:#10b981;color:#ffffff;border-radius:8px;font-size:15px;font-weight:600;text-decoration:none;">
-                Book Now
-              </a>
+              <!-- CTA -->
+              <div style="text-align:center;">
+                <a href="${process.env.FRONTEND_URL ?? '#'}/watchlist/${watchlistId}"
+                   style="display:inline-block;padding:13px 36px;background:#ffffff;color:#000000;border-radius:10px;font-size:14px;font-weight:700;text-decoration:none;letter-spacing:0.5px;">
+                  Book Now
+                </a>
+              </div>
+
             </td>
           </tr>
+
+          <!-- Footer -->
           <tr>
-            <td style="background:#f9fafb;padding:16px 40px;text-align:center;border-top:1px solid #e5e7eb;">
-              <p style="margin:0;font-size:12px;color:#9ca3af;">
-                You're receiving this because you're watching this route on
-                <a href="${process.env.FRONTEND_URL ?? '#'}" style="color:#0ea5e9;">SkyTrackr</a>.
+            <td style="background:#0a0a0a;padding:18px 32px;text-align:center;border-top:1px solid #1f1f1f;">
+              <p style="margin:0;font-size:12px;color:#4b5563;">
+                You're watching this route on <a href="${process.env.FRONTEND_URL ?? '#'}" style="color:#9ca3af;text-decoration:none;font-weight:600;">SkyTrackr</a>.
               </p>
             </td>
           </tr>
+
         </table>
       </td>
     </tr>
@@ -304,32 +370,42 @@ export class MailService {
         html: `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"/></head>
-<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 0;">
+<body style="margin:0;padding:0;background:#111111;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#111111;padding:40px 0;">
     <tr>
       <td align="center">
-        <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <table width="480" cellpadding="0" cellspacing="0" style="background:#161616;border-radius:16px;overflow:hidden;">
+
+          <!-- Header -->
           <tr>
-            <td style="background:linear-gradient(135deg,#0ea5e9,#6366f1);padding:32px 40px;text-align:center;">
-              <h1 style="margin:0;color:#ffffff;font-size:28px;letter-spacing:-0.5px;">SkyTrackr</h1>
-              <p style="margin:8px 0 0;color:#e0f2fe;font-size:15px;">Email Verification</p>
+            <td style="background:#000000;padding:28px 32px;text-align:center;">
+              <p style="margin:0 0 6px;font-size:18px;font-weight:800;color:#ffffff;">SkyTrackr</p>
+              <p style="margin:0;font-size:11px;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:2px;">Email Verification</p>
             </td>
           </tr>
+
+          <!-- Body -->
           <tr>
-            <td style="padding:36px 40px;text-align:center;">
-              <h2 style="margin:0 0 8px;color:#1f2937;font-size:20px;">Hi ${fname}!</h2>
-              <p style="margin:0 0 28px;color:#6b7280;font-size:15px;">Use the code below to verify your account. It expires in 10 minutes.</p>
-              <div style="display:inline-block;background:#f0f9ff;border:2px dashed #0ea5e9;border-radius:12px;padding:20px 48px;margin-bottom:24px;">
-                <span style="font-size:36px;font-weight:800;letter-spacing:10px;color:#0ea5e9;">${otp}</span>
+            <td style="padding:36px 32px;text-align:center;">
+              <h2 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#ffffff;">Hi ${fname}!</h2>
+              <p style="margin:0 0 32px;font-size:14px;color:#6b7280;line-height:1.6;">Use the code below to verify your account. It expires in 10 minutes.</p>
+
+              <!-- OTP box -->
+              <div style="display:inline-block;background:#000000;border:1px solid #2a2a2a;border-radius:14px;padding:24px 48px;margin-bottom:20px;">
+                <span style="font-size:38px;font-weight:800;letter-spacing:12px;color:#ffffff;font-family:monospace;">${otp}</span>
               </div>
-              <p style="margin:0;color:#9ca3af;font-size:13px;">Expires at ${otpExpires.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</p>
+
+              <p style="margin:0;font-size:12px;color:#4b5563;">Expires at ${otpExpires.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</p>
             </td>
           </tr>
+
+          <!-- Footer -->
           <tr>
-            <td style="background:#f9fafb;padding:16px 40px;text-align:center;border-top:1px solid #e5e7eb;">
-              <p style="margin:0;font-size:12px;color:#9ca3af;">If you didn't create a SkyTrackr account, you can safely ignore this email.</p>
+            <td style="background:#0a0a0a;padding:18px 32px;text-align:center;border-top:1px solid #1f1f1f;">
+              <p style="margin:0;font-size:12px;color:#4b5563;">If you didn't create a SkyTrackr account, you can safely ignore this email.</p>
             </td>
           </tr>
+
         </table>
       </td>
     </tr>
@@ -352,30 +428,43 @@ export class MailService {
         html: `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"/></head>
-<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 0;">
+<body style="margin:0;padding:0;background:#111111;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#111111;padding:40px 0;">
     <tr>
       <td align="center">
-        <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <table width="480" cellpadding="0" cellspacing="0" style="background:#161616;border-radius:16px;overflow:hidden;">
+
+          <!-- Header -->
           <tr>
-            <td style="background:linear-gradient(135deg,#0ea5e9,#6366f1);padding:32px 40px;text-align:center;">
-              <h1 style="margin:0;color:#ffffff;font-size:28px;letter-spacing:-0.5px;">SkyTrackr</h1>
-              <p style="margin:8px 0 0;color:#e0f2fe;font-size:15px;">Password Reset</p>
+            <td style="background:#000000;padding:28px 32px;text-align:center;">
+              <p style="margin:0 0 6px;font-size:18px;font-weight:800;color:#ffffff;">SkyTrackr</p>
+              <p style="margin:0;font-size:11px;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:2px;">Password Reset</p>
             </td>
           </tr>
+
+          <!-- Body -->
           <tr>
-            <td style="padding:36px 40px;text-align:center;">
-              <h2 style="margin:0 0 8px;color:#1f2937;font-size:20px;">Hi ${fname}!</h2>
-              <p style="margin:0 0 28px;color:#6b7280;font-size:15px;">We received a request to reset your password. Click the button below — the link expires in 15 minutes.</p>
-              <a href="${resetLink}" style="display:inline-block;background:#0ea5e9;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 36px;border-radius:10px;margin-bottom:24px;">Reset Password</a>
-              <p style="margin:0;color:#9ca3af;font-size:12px;">Or copy this link into your browser:<br/><span style="color:#0ea5e9;word-break:break-all;">${resetLink}</span></p>
+            <td style="padding:36px 32px;text-align:center;">
+              <h2 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#ffffff;">Hi ${fname}!</h2>
+              <p style="margin:0 0 32px;font-size:14px;color:#6b7280;line-height:1.6;">We received a request to reset your password. Click the button below — the link expires in 15 minutes.</p>
+
+              <a href="${resetLink}" style="display:inline-block;background:#ffffff;color:#000000;font-size:14px;font-weight:700;text-decoration:none;padding:14px 36px;border-radius:10px;margin-bottom:28px;letter-spacing:0.5px;">
+                Reset Password
+              </a>
+
+              <p style="margin:0;font-size:11px;color:#4b5563;line-height:1.6;">Or copy this link:<br/>
+                <span style="color:#6b7280;word-break:break-all;font-family:monospace;font-size:10px;">${resetLink}</span>
+              </p>
             </td>
           </tr>
+
+          <!-- Footer -->
           <tr>
-            <td style="background:#f9fafb;padding:16px 40px;text-align:center;border-top:1px solid #e5e7eb;">
-              <p style="margin:0;font-size:12px;color:#9ca3af;">If you didn't request a password reset, you can safely ignore this email.</p>
+            <td style="background:#0a0a0a;padding:18px 32px;text-align:center;border-top:1px solid #1f1f1f;">
+              <p style="margin:0;font-size:12px;color:#4b5563;">If you didn't request a password reset, you can safely ignore this email.</p>
             </td>
           </tr>
+
         </table>
       </td>
     </tr>

@@ -196,67 +196,68 @@ export class BookingsService {
       throw new NotFoundException('No booking found with that PNR and last name');
     }
 
-    const token = await this.getAccessToken();
-    const url = `https://test.api.amadeus.com/v1/booking/flight-orders/${booking.amadeusOrderId}`;
-
+    // Try to fetch live data from Amadeus; fall back to stored data if order was purged
+    let order: any = null;
     try {
+      const token = await this.getAccessToken();
+      const url = `https://test.api.amadeus.com/v1/booking/flight-orders/${booking.amadeusOrderId}`;
       const response = await firstValueFrom(
         this.httpService.get(url, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       );
-
-      const order = response.data.data;
-      const flightOffer = order.flightOffers?.[0];
-
-      return {
-        bookingId: booking._id,
-        amadeusOrderId: order.id,
-        pnr: booking.pnr,
-        status: booking.status,
-        createdAt: (booking as any).createdAt,
-        price: {
-          amount: flightOffer?.price?.grandTotal ?? booking.totalPrice,
-          currency: flightOffer?.price?.currency ?? booking.currency,
-        },
-        travelers: order.travelers?.map((t: any) => ({
-          id: t.id,
-          name: `${t.name.firstName} ${t.name.lastName}`,
-          dateOfBirth: t.dateOfBirth,
-          contact: t.contact,
-          documents: t.documents,
-        })),
-        itineraries: flightOffer?.itineraries?.map((it: any, index: number) => ({
-          type: index === 0 ? 'outbound' : 'inbound',
-          duration: it.duration,
-          segments: it.segments.map((s: any) => ({
-            departure: {
-              iataCode: s.departure.iataCode,
-              terminal: s.departure.terminal,
-              time: s.departure.at,
-            },
-            arrival: {
-              iataCode: s.arrival.iataCode,
-              terminal: s.arrival.terminal,
-              time: s.arrival.at,
-            },
-            carrierCode: s.carrierCode,
-            flightNumber: s.number,
-            aircraft: s.aircraft?.code,
-            duration: s.duration,
-          })),
-        })),
-        seatings: booking.seatings,
-        remarks: order.remarks,
-        ticketingAgreement: order.ticketingAgreement,
-        contacts: order.contacts,
-      };
+      order = response.data.data;
     } catch (error: any) {
-      console.error('Amadeus Track Booking Error:', error.response?.data || error.message);
-      throw new BadRequestException(
-        error.response?.data?.errors?.[0]?.detail || 'Could not retrieve booking from Amadeus',
-      );
+      // Order purged from Amadeus (test env) or network error — use stored data
+      console.warn('Amadeus order not found, falling back to stored data:', error.response?.data?.errors?.[0]?.detail || error.message);
     }
+
+    const flightOffer = order?.flightOffers?.[0] ?? (booking as any).flightOffer;
+    const storedTravelers = (booking as any).travelers ?? [];
+
+    return {
+      bookingId: booking._id,
+      amadeusOrderId: booking.amadeusOrderId,
+      pnr: booking.pnr,
+      status: booking.status,
+      createdAt: (booking as any).createdAt,
+      source: order ? 'amadeus' : 'local',
+      price: {
+        amount: flightOffer?.price?.grandTotal ?? booking.totalPrice,
+        currency: flightOffer?.price?.currency ?? booking.currency,
+      },
+      travelers: (order?.travelers ?? storedTravelers).map((t: any) => ({
+        id: t.id,
+        name: t.name ? `${t.name.firstName} ${t.name.lastName}` : `${t.firstName ?? ''} ${t.lastName ?? ''}`.trim(),
+        dateOfBirth: t.dateOfBirth,
+        contact: t.contact,
+        documents: t.documents,
+      })),
+      itineraries: flightOffer?.itineraries?.map((it: any, index: number) => ({
+        type: index === 0 ? 'outbound' : 'inbound',
+        duration: it.duration,
+        segments: it.segments.map((s: any) => ({
+          departure: {
+            iataCode: s.departure.iataCode,
+            terminal: s.departure.terminal,
+            time: s.departure.at,
+          },
+          arrival: {
+            iataCode: s.arrival.iataCode,
+            terminal: s.arrival.terminal,
+            time: s.arrival.at,
+          },
+          carrierCode: s.carrierCode,
+          flightNumber: s.number,
+          aircraft: s.aircraft?.code,
+          duration: s.duration,
+        })),
+      })),
+      seatings: booking.seatings,
+      remarks: order?.remarks,
+      ticketingAgreement: order?.ticketingAgreement,
+      contacts: order?.contacts,
+    };
   }
 
   async getBookingsByUser(userId: string) {
