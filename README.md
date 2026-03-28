@@ -1,15 +1,18 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img width="200" height="200" alt="image" src="https://github.com/user-attachments/assets/4969c6e8-0a45-4e70-9b96-fd8294f42acc" /></a>
-</p>
+<p align="center"> <a href="http://nestjs.com/" target="blank"> <img width="200" height="200" alt="image" src="https://github.com/user-attachments/assets/4969c6e8-0a45-4e70-9b96-fd8294f42acc" /> </a> </p>
+✈️ Welcome to SkyTrackR!
 
+SkyTrackR is your smart co-pilot for finding the best flight deals without the turbulence.
+We combine Amadeus Flight API, AI-powered price prediction, and personalized recommendations to help you fly smarter — not harder.
 
+💡 Whether you're planning ahead or chasing last-minute deals, SkyTrackR helps you:
 
-## Description
+🔍 Browse flights quickly
+💸 Predict cheaper booking times using AI
+🎯 Get personalized travel suggestions
+🌎 Discover the best routes for your budget
 
-<h1>Welcome to SkyTrackR!</h1>
-
-<p>SkyTrackR is a plane ticket browsing and booking platform using Amadeus Flight API, AI-trained price prediction, and user personalizations.</p>
-<p>Our team is dedicated to serving fliers looking for the cheapest flights at the cheapest times.</p>
+Our mission?
+Help travelers take off at the lowest price possible. 🚀
 
 ## Project setup
 
@@ -43,42 +46,4 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
-## Deployment
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
