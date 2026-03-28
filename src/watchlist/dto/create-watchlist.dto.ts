@@ -28,10 +28,20 @@ export class CreateWatchlistDto {
   @IsString()
   departureDate: string;
 
-  @ApiProperty({ example: '2026-02-22', required: false })
+  @ApiProperty({ example: '2026-03-30', required: false })
   @IsOptional()
   @IsString()
-  returnDate: string;
+  returnDate?: string;
+
+  @ApiProperty({ example: '08:00', required: false })
+  @IsOptional()
+  @IsString()
+  departureTime?: string;
+
+  @ApiProperty({ example: '14:00', required: false })
+  @IsOptional()
+  @IsString()
+  returnTime?: string;
 
   @ApiProperty({ example: 1 })
   @Type(() => Number)
@@ -56,4 +66,13 @@ export class CreateWatchlistDto {
   @IsOptional()
   @IsString()
   currency?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  segments?: Array<{
+	carrierCode: string;
+	flightNumber: string;
+	departure: { iataCode: string; date: string; time: string; };
+	arrival: { iataCode: string; date: string; time: string; };
+}>;
 }

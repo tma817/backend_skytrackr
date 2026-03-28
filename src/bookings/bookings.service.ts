@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
@@ -14,6 +15,7 @@ import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
 export class BookingsService {
+  private readonly logger = new Logger(BookingsService.name);
   private accessToken: string = '';
   private tokenExpiry: number = 0;
 
@@ -61,8 +63,57 @@ export class BookingsService {
       throw new NotFoundException('Flight offer not found');
     }
 
-    // 2. Call Amadeus Flight Orders API
     const token = await this.getAccessToken();
+
+    // 2. Re-fetch a fresh matching offer from Amadeus
+    let offerToBook = rawFlight;
+    try {
+      const searchRes = await firstValueFrom(
+        this.httpService.get('https://test.api.amadeus.com/v2/shopping/flight-offers', {
+          headers: { Authorization: `Bearer ${token}` },
+          params: {
+            originLocationCode: flightSearch.origin,
+            destinationLocationCode: flightSearch.destination,
+            departureDate: flightSearch.departureDate,
+            adults: flightSearch.adults,
+            ...(flightSearch.returnDate ? { returnDate: flightSearch.returnDate } : {}),
+            currencyCode: rawFlight.price?.currency ?? 'CAD',
+            max: 50,
+          },
+        }),
+      );
+
+      const freshOffers: any[] = searchRes.data.data ?? [];
+      const cachedDep = rawFlight.itineraries?.[0]?.segments?.[0]?.departure;
+      const matched = freshOffers.find((o: any) => {
+        const dep = o.itineraries?.[0]?.segments?.[0]?.departure;
+        return (
+          o.validatingAirlineCodes?.[0] === rawFlight.validatingAirlineCodes?.[0] &&
+          dep?.iataCode === cachedDep?.iataCode &&
+          dep?.at?.substring(0, 16) === cachedDep?.at?.substring(0, 16)
+        );
+      });
+
+      if (matched) offerToBook = matched;
+    } catch (refreshErr: any) {
+      console.warn('Could not refresh offer, using cached:', refreshErr.message);
+    }
+
+    // 3. Price the offer to get a confirmed bookable offer
+    try {
+      const priceRes = await firstValueFrom(
+        this.httpService.post(
+          'https://test.api.amadeus.com/v1/shopping/flight-offers/pricing',
+          { data: { type: 'flight-offers-pricing', flightOffers: [offerToBook] } },
+          { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+        ),
+      );
+      offerToBook = priceRes.data.data.flightOffers[0];
+    } catch (priceErr: any) {
+      console.warn('Could not re-price offer, using unpriced offer:', priceErr.message);
+    }
+
+    // 4. Call Amadeus Flight Orders API
     const url = 'https://test.api.amadeus.com/v1/booking/flight-orders';
 
     try {
@@ -72,7 +123,7 @@ export class BookingsService {
           {
             data: {
               type: 'flight-order',
-              flightOffers: [rawFlight],
+              flightOffers: [offerToBook],
               travelers,
               ...(seatings && seatings.length > 0 && { seatings }),
               ...(remarks && { remarks }),
@@ -97,7 +148,7 @@ export class BookingsService {
       const booking = await this.bookingModel.create({
         amadeusOrderId: order.id,
         pnr,
-        flightOffer: rawFlight,
+        flightOffer: offerToBook,
         travelers,
         seatings: seatings ?? [],
         totalPrice: rawFlight.price.total,
@@ -112,19 +163,32 @@ export class BookingsService {
         status: 'CONFIRMED',
         totalPrice: rawFlight.price.total,
         currency: rawFlight.price.currency,
-        travelers: order.travelers,
+        travelers,           // use DTO travelers — they have contact.emailAddress; Amadeus strips it from the response
         flightOffers: order.flightOffers,
         seatings: seatings ?? [],
       };
 
       // 4. Send confirmation email (non-blocking)
-      this.mailService.sendBookingConfirmation(result).catch(() => {});
+      
+      this.mailService.sendBookingConfirmation(result).catch((err) => {
+        this.logger.error('Failed to send booking confirmation email', err?.message);
+      });
 
       return result;
     } catch (error: any) {
       console.error('Amadeus Booking Error:', error.response?.data || error.message);
+      const amadeusCode = error.response?.data?.errors?.[0]?.code;
+      const amadeusDetail = error.response?.data?.errors?.[0]?.detail ?? '';
+
+      const isOfferExpired =
+        amadeusCode === 34651 ||
+        amadeusDetail.toLowerCase().includes('segment sell') ||
+        amadeusDetail.toLowerCase().includes('could not sell');
+
       throw new BadRequestException(
-        error.response?.data?.errors?.[0]?.detail || 'Could not create booking',
+        isOfferExpired
+          ? 'OFFER_EXPIRED'
+          : amadeusDetail || 'Could not create booking',
       );
     }
   }
@@ -147,67 +211,68 @@ export class BookingsService {
       throw new NotFoundException('No booking found with that PNR and last name');
     }
 
-    const token = await this.getAccessToken();
-    const url = `https://test.api.amadeus.com/v1/booking/flight-orders/${booking.amadeusOrderId}`;
-
+    // Try to fetch live data from Amadeus; fall back to stored data if order was purged
+    let order: any = null;
     try {
+      const token = await this.getAccessToken();
+      const url = `https://test.api.amadeus.com/v1/booking/flight-orders/${booking.amadeusOrderId}`;
       const response = await firstValueFrom(
         this.httpService.get(url, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       );
-
-      const order = response.data.data;
-      const flightOffer = order.flightOffers?.[0];
-
-      return {
-        bookingId: booking._id,
-        amadeusOrderId: order.id,
-        pnr: booking.pnr,
-        status: booking.status,
-        createdAt: (booking as any).createdAt,
-        price: {
-          amount: flightOffer?.price?.grandTotal ?? booking.totalPrice,
-          currency: flightOffer?.price?.currency ?? booking.currency,
-        },
-        travelers: order.travelers?.map((t: any) => ({
-          id: t.id,
-          name: `${t.name.firstName} ${t.name.lastName}`,
-          dateOfBirth: t.dateOfBirth,
-          contact: t.contact,
-          documents: t.documents,
-        })),
-        itineraries: flightOffer?.itineraries?.map((it: any, index: number) => ({
-          type: index === 0 ? 'outbound' : 'inbound',
-          duration: it.duration,
-          segments: it.segments.map((s: any) => ({
-            departure: {
-              iataCode: s.departure.iataCode,
-              terminal: s.departure.terminal,
-              time: s.departure.at,
-            },
-            arrival: {
-              iataCode: s.arrival.iataCode,
-              terminal: s.arrival.terminal,
-              time: s.arrival.at,
-            },
-            carrierCode: s.carrierCode,
-            flightNumber: s.number,
-            aircraft: s.aircraft?.code,
-            duration: s.duration,
-          })),
-        })),
-        seatings: booking.seatings,
-        remarks: order.remarks,
-        ticketingAgreement: order.ticketingAgreement,
-        contacts: order.contacts,
-      };
+      order = response.data.data;
     } catch (error: any) {
-      console.error('Amadeus Track Booking Error:', error.response?.data || error.message);
-      throw new BadRequestException(
-        error.response?.data?.errors?.[0]?.detail || 'Could not retrieve booking from Amadeus',
-      );
+      // Order purged from Amadeus (test env) or network error — use stored data
+      console.warn('Amadeus order not found, falling back to stored data:', error.response?.data?.errors?.[0]?.detail || error.message);
     }
+
+    const flightOffer = order?.flightOffers?.[0] ?? (booking as any).flightOffer;
+    const storedTravelers = (booking as any).travelers ?? [];
+
+    return {
+      bookingId: booking._id,
+      amadeusOrderId: booking.amadeusOrderId,
+      pnr: booking.pnr,
+      status: booking.status,
+      createdAt: (booking as any).createdAt,
+      source: order ? 'amadeus' : 'local',
+      price: {
+        amount: flightOffer?.price?.grandTotal ?? booking.totalPrice,
+        currency: flightOffer?.price?.currency ?? booking.currency,
+      },
+      travelers: (order?.travelers ?? storedTravelers).map((t: any) => ({
+        id: t.id,
+        name: t.name ? `${t.name.firstName} ${t.name.lastName}` : `${t.firstName ?? ''} ${t.lastName ?? ''}`.trim(),
+        dateOfBirth: t.dateOfBirth,
+        contact: t.contact,
+        documents: t.documents,
+      })),
+      itineraries: flightOffer?.itineraries?.map((it: any, index: number) => ({
+        type: index === 0 ? 'outbound' : 'inbound',
+        duration: it.duration,
+        segments: it.segments.map((s: any) => ({
+          departure: {
+            iataCode: s.departure.iataCode,
+            terminal: s.departure.terminal,
+            time: s.departure.at,
+          },
+          arrival: {
+            iataCode: s.arrival.iataCode,
+            terminal: s.arrival.terminal,
+            time: s.arrival.at,
+          },
+          carrierCode: s.carrierCode,
+          flightNumber: s.number,
+          aircraft: s.aircraft?.code,
+          duration: s.duration,
+        })),
+      })),
+      seatings: booking.seatings,
+      remarks: order?.remarks,
+      ticketingAgreement: order?.ticketingAgreement,
+      contacts: order?.contacts,
+    };
   }
 
   async getBookingsByUser(userId: string) {

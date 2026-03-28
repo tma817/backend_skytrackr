@@ -58,7 +58,6 @@ export default class FlightsController {
         includedCheckedBagsOnly,
         excludedAlliances,
       });
-
       if (!rawFlights || !rawFlights.results) {
         return { items: [], total: 0, page: query.page || 1 };
       }
@@ -115,6 +114,30 @@ export default class FlightsController {
     @Query('flightId') flightId: string,
   ) {
     return await this.flightsService.getSeatMap(searchId, flightId);
+  }
+
+  @Get('price-analysis')
+  async getPriceAnalysis(
+    @Query('origin') origin: string,
+    @Query('destination') destination: string,
+    @Query('departureDate') departureDate: string,
+    @Query('currentPrice') currentPrice: string,
+    @Query('currency') currency?: string,
+    @Query('oneWay') oneWay?: string,
+    @Query('returnDate') returnDate?: string,
+  ) {
+    if (!origin || !destination || !departureDate || !currentPrice) {
+      throw new BadRequestException('origin, destination, departureDate, and currentPrice are required');
+    }
+    return this.flightsService.getPriceAnalysis({
+      origin,
+      destination,
+      departureDate,
+      currentPrice: parseFloat(currentPrice),
+      currency,
+      oneWay: oneWay !== 'false',
+      returnDate,
+    });
   }
 
   @Get(':id')

@@ -55,4 +55,5 @@ export class WatchlistController {
     const userId = req.user.userId
     return this.watchlistService.remove(userId, id);
   }
+  
 }

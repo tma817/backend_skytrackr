@@ -1,17 +1,47 @@
 import { Body, Controller, Post, HttpCode, HttpStatus } from '@nestjs/common';
+import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 
 export class RegisterDto {
+  @IsString()
   fname: string;
+
+  @IsString()
   lname: string;
+
+  @IsEmail()
   email: string;
+
+  @IsString()
+  @MinLength(6)
   password: string;
+
+  @IsOptional()
+  @IsString()
   phoneNumber?: string;
 }
 
 export class VerifyOtpDto {
+  @IsEmail()
   email: string;
+
+  @IsString()
   otpCode: string;
+}
+
+export class ForgotPasswordDto {
+  @IsEmail()
+  email: string;
+}
+
+export class ResetPasswordDto {
+  @IsString()
+  token: string;
+
+  @IsString()
+  @MinLength(6)
+  newPassword: string;
 }
 @Controller('auth')
 export class AuthController {
@@ -41,7 +71,19 @@ export class AuthController {
 
   @Post('resend-otp')
   async resendOtp(@Body('email') email: string) {
-      return this.authService.resendOtp(email);
+    return this.authService.resendOtp(email);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('forgot-password')
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('reset-password')
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto.token, dto.newPassword);
   }
 
 }
