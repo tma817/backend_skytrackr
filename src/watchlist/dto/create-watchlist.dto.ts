@@ -66,4 +66,13 @@ export class CreateWatchlistDto {
   @IsOptional()
   @IsString()
   currency?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  segments?: Array<{
+	carrierCode: string;
+	flightNumber: string;
+	departure: { iataCode: string; date: string; time: string; };
+	arrival: { iataCode: string; date: string; time: string; };
+}>;
 }
