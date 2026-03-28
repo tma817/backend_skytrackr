@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="http://nestjs.com/" target="blank"><img width="200" height="200" alt="image" src="https://github.com/user-attachments/assets/4969c6e8-0a45-4e70-9b96-fd8294f42acc" /><h1> SkyTrackR</h1></a>
+  <a href="http://nestjs.com/" target="blank"><img width="200" height="200" alt="image" src="https://github.com/user-attachments/assets/4969c6e8-0a45-4e70-9b96-fd8294f42acc" /></a>
 </p>
 
 
@@ -9,6 +9,7 @@
 <h1>Welcome to SkyTrackR!</h1>
 
 <p>SkyTrackR is a plane ticket browsing and booking platform using Amadeus Flight API, AI-trained price prediction, and user personalizations.</p>
+<p>Our team is dedicated to serving fliers looking for the cheapest flights at the cheapest times.</p>
 
 ## Project setup
 
