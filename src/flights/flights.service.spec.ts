@@ -5,6 +5,7 @@ import { FlightSearch } from './schemas/flight.schema';
 import { PriceGrid } from './schemas/price-grid.schema';
 import { HttpService } from '@nestjs/axios';
 import { AirlinesService } from 'src/airlines/airlines.service';
+import { AirportsService } from 'src/airports/airports.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { of, throwError } from 'rxjs';
 
@@ -76,6 +77,7 @@ const mockPriceGridModel = {
 
 const mockHttpService = { get: jest.fn(), post: jest.fn() };
 const mockAirlinesService = { getAirlineByIata: jest.fn() };
+const mockAirportsService = { getByIata: jest.fn().mockResolvedValue(null) };
 
 // ─── Suite ────────────────────────────────────────────────────────────────────
 
@@ -94,6 +96,7 @@ describe('FlightsService', () => {
         { provide: getModelToken(PriceGrid.name), useValue: mockPriceGridModel },
         { provide: HttpService, useValue: mockHttpService },
         { provide: AirlinesService, useValue: mockAirlinesService },
+        { provide: AirportsService, useValue: mockAirportsService },
       ],
     }).compile();
 
@@ -622,13 +625,13 @@ describe('FlightsService', () => {
   });
 
   describe('formatEndPoint', () => {
-    it('should extract time, date, iataCode, and terminal', () => {
-      const result = (service as any).formatEndPoint({
+    it('should extract time, date, iataCode, and terminal', async () => {
+      const result = await (service as any).formatEndPoint({
         at: '2026-06-15T08:30:00',
         iataCode: 'YUL',
         terminal: '1',
       });
-      expect(result).toEqual({ time: '08:30', date: '2026-06-15', iataCode: 'YUL', terminal: '1' });
+      expect(result).toEqual({ time: '08:30', date: '2026-06-15', iataCode: 'YUL', terminal: '1', airportName: null, cityName: null });
     });
   });
 });
