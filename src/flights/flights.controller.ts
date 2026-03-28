@@ -124,6 +124,7 @@ export default class FlightsController {
     @Query('currentPrice') currentPrice: string,
     @Query('currency') currency?: string,
     @Query('oneWay') oneWay?: string,
+    @Query('returnDate') returnDate?: string,
   ) {
     if (!origin || !destination || !departureDate || !currentPrice) {
       throw new BadRequestException('origin, destination, departureDate, and currentPrice are required');
@@ -135,6 +136,7 @@ export default class FlightsController {
       currentPrice: parseFloat(currentPrice),
       currency,
       oneWay: oneWay !== 'false',
+      returnDate,
     });
   }
 

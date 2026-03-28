@@ -576,8 +576,9 @@ export class FlightsService {
     departureDate: string;
     currency?: string;
     oneWay?: boolean;
+    returnDate?: string;
   }) {
-    const { origin, destination, departureDate, currency = 'CAD', oneWay = true } = params;
+    const { origin, destination, departureDate, currency = 'CAD', oneWay = true, returnDate } = params;
 
     const [year, month] = departureDate.split('-');
     const yearMonth = `${year}-${month}`;
@@ -587,7 +588,7 @@ export class FlightsService {
 
     // 1. Load whatever we already have cached for this month
     const cached = await this.priceGridModel
-      .findOne({ origin, destination, yearMonth, currency })
+      .findOne({ origin, destination, yearMonth, currency, oneWay })
       .lean();
 
     const priceMap = new Map<string, number>(
@@ -600,8 +601,27 @@ export class FlightsService {
     if (missing.length > 0) {
       const token = await this.getAccessToken();
 
+      // For roundtrip: compute trip duration in days to keep it consistent per nearby date
+      const tripDurationDays =
+        !oneWay && returnDate
+          ? Math.round(
+              (new Date(returnDate + 'T00:00:00').getTime() -
+                new Date(departureDate + 'T00:00:00').getTime()) /
+                (1000 * 60 * 60 * 24),
+            )
+          : 0;
+
       for (let i = 0; i < missing.length; i++) {
         const date = missing[i];
+
+        // For roundtrip, shift the return date by the same offset as the departure date
+        const nearbyReturnDate =
+          !oneWay && tripDurationDays > 0
+            ? new Date(new Date(date + 'T00:00:00').getTime() + tripDurationDays * 86400000)
+                .toISOString()
+                .slice(0, 10)
+            : undefined;
+
         try {
           const res = await firstValueFrom(
             this.httpService.get(
@@ -615,6 +635,7 @@ export class FlightsService {
                   adults: 1,
                   max: 1,
                   currencyCode: currency,
+                  ...(nearbyReturnDate ? { returnDate: nearbyReturnDate } : {}),
                 },
               },
             ),
@@ -669,8 +690,9 @@ export class FlightsService {
     currentPrice: number;
     currency?: string;
     oneWay?: boolean;
+    returnDate?: string;
   }) {
-    const { origin, destination, departureDate, currentPrice, currency = 'CAD', oneWay = true } = params;
+    const { origin, destination, departureDate, currentPrice, currency = 'CAD', oneWay = true, returnDate } = params;
 
     const today = new Date();
     const dep = new Date(departureDate + 'T00:00:00');
@@ -681,7 +703,7 @@ export class FlightsService {
     let percentile: number | null = null;
 
     try {
-      const gridResult = await this.getPriceGrid({ origin, destination, departureDate, currency, oneWay });
+      const gridResult = await this.getPriceGrid({ origin, destination, departureDate, currency, oneWay, returnDate });
       const prices = gridResult.data
         .map((d) => d.price)
         .filter((p) => p > 0)

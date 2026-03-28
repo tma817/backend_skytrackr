@@ -26,6 +26,7 @@ export class MailService {
       this.logger.warn(`No email recipients for booking ${booking.bookingId}`);
       return;
     }
+    console.log(recipients)
 
     const html = this.buildBookingEmail(booking);
 
@@ -486,7 +487,8 @@ export class MailService {
     });
   }
 
-  private formatDuration(duration: string): string {
+  private formatDuration(duration?: string): string {
+    if (!duration) return '';
     return duration.replace('PT', '').replace('H', 'h ').replace('M', 'm').toLowerCase();
   }
 }

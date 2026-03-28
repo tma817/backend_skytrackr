@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
@@ -14,6 +15,7 @@ import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
 export class BookingsService {
+  private readonly logger = new Logger(BookingsService.name);
   private accessToken: string = '';
   private tokenExpiry: number = 0;
 
@@ -161,19 +163,32 @@ export class BookingsService {
         status: 'CONFIRMED',
         totalPrice: rawFlight.price.total,
         currency: rawFlight.price.currency,
-        travelers: order.travelers,
+        travelers,           // use DTO travelers — they have contact.emailAddress; Amadeus strips it from the response
         flightOffers: order.flightOffers,
         seatings: seatings ?? [],
       };
 
       // 4. Send confirmation email (non-blocking)
-      this.mailService.sendBookingConfirmation(result).catch(() => {});
+      
+      this.mailService.sendBookingConfirmation(result).catch((err) => {
+        this.logger.error('Failed to send booking confirmation email', err?.message);
+      });
 
       return result;
     } catch (error: any) {
       console.error('Amadeus Booking Error:', error.response?.data || error.message);
+      const amadeusCode = error.response?.data?.errors?.[0]?.code;
+      const amadeusDetail = error.response?.data?.errors?.[0]?.detail ?? '';
+
+      const isOfferExpired =
+        amadeusCode === 34651 ||
+        amadeusDetail.toLowerCase().includes('segment sell') ||
+        amadeusDetail.toLowerCase().includes('could not sell');
+
       throw new BadRequestException(
-        error.response?.data?.errors?.[0]?.detail || 'Could not create booking',
+        isOfferExpired
+          ? 'OFFER_EXPIRED'
+          : amadeusDetail || 'Could not create booking',
       );
     }
   }
