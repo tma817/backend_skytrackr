@@ -201,6 +201,7 @@ export class WatchlistService {
       airlineName: item.airlineName,
       airlineLogo: item.airlineLogo,
       currency: item.currency ?? 'CAD',
+      segments: (item as any).segments ?? [],
     }));
   }
 

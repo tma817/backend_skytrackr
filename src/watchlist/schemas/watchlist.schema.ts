@@ -56,6 +56,19 @@ export class Watchlist extends Document {
 
   @Prop({ default: 'CAD' })
   currency: string;
+
+  @Prop({ type: [{ 
+    carrierCode: String, 
+    flightNumber: String,
+    departure: { iataCode: String, date: String, time: String },
+    arrival: { iataCode: String, date: String, time: String },
+}], default: [] })
+segments: Array<{
+    carrierCode: string;
+    flightNumber: string;
+    departure: { iataCode: string; date: string; time: string; };
+    arrival: { iataCode: string; date: string; time: string; };
+}>;
 }
 
 export const WatchlistSchema = SchemaFactory.createForClass(Watchlist);
