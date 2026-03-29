@@ -88,6 +88,10 @@ export class AirlinesService implements OnApplicationBootstrap {
                 }
             });
     }
+    private policyLogo(iata: string): string {
+        return `https://www.gstatic.com/flights/airline_logos/70px/${iata}.png`;
+    }
+
     async getAllPolicies(search?: string, alliance?: string) {
         const filter: any = {};
         if (alliance && alliance !== 'All') filter.alliance = alliance;
@@ -96,11 +100,14 @@ export class AirlinesService implements OnApplicationBootstrap {
             { iata: { $regex: search, $options: 'i' } },
             { country: { $regex: search, $options: 'i' } },
         ];
-        return this.policyModel.find(filter).lean();
+        const results = await this.policyModel.find(filter).lean();
+        return results.map(a => ({ ...a, logo: this.policyLogo(a.iata) }));
     }
 
     async getPolicyByIata(iata: string) {
-        return this.policyModel.findOne({ iata: iata.toUpperCase() }).lean();
+        const policy = await this.policyModel.findOne({ iata: iata.toUpperCase() }).lean();
+        if (!policy) return null;
+        return { ...policy, logo: this.policyLogo(policy.iata) };
     }
 
     async getAirlineByIata(iataCode: string) {

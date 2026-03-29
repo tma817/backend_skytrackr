@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import Anthropic from '@anthropic-ai/sdk';
 import { PriceHistory } from 'src/watchlist/schemas/price-history.schema';
 import { PriceGrid } from 'src/flights/schemas/price-grid.schema';
+import { UsersService } from 'src/users/users.service';
 
 export interface PricePrediction {
   origin: string;
@@ -30,6 +31,7 @@ export class PredictionService {
   constructor(
     @InjectModel(PriceHistory.name) private priceHistoryModel: Model<PriceHistory>,
     @InjectModel(PriceGrid.name) private priceGridModel: Model<PriceGrid>,
+    private usersService: UsersService,
   ) {}
 
   async predictPrice(
@@ -37,7 +39,9 @@ export class PredictionService {
     destination: string,
     departureDate: string,
     currency: string = 'CAD',
+    userEmail?: string,
   ): Promise<PricePrediction> {
+    const prefs = userEmail ? await this.usersService.getPreferences(userEmail) : null;
     // Gather historical price snapshots for this route
     const history = await this.priceHistoryModel
       .find({ origin, destination, departureDate })
@@ -87,6 +91,16 @@ export class PredictionService {
 
     const currentPrice = currentGridPrice ?? history[history.length - 1]?.price ?? null;
 
+    const prefsSection = prefs
+      ? `\nUSER TRAVEL PROFILE:
+- Budget ceiling: ${prefs.budgetMax ? `$${prefs.budgetMax} ${currency}` : 'not set'}
+- Date flexibility: ${prefs.flexibility ? `±${prefs.flexibility} days` : 'none'}
+
+Apply the user profile:
+- If the current or predicted price is at or above their budget ceiling, recommend buy_now if the trend is rising.
+- If they have date flexibility and the trend is falling, you may suggest checking nearby dates.`
+      : '';
+
     const prompt = `You are a flight price prediction expert. Analyze the following price data for a flight route and predict whether the price will go up or down.
 
 ROUTE: ${origin} → ${destination}
@@ -98,7 +112,7 @@ PRICE HISTORY (${dataPoints} data points):
 ${historyContext}
 
 ${priceGrid?.data?.length ? `RECENT PRICE GRID (${priceGrid.data.length} dates around departure):\n${priceGrid.data.map((d) => `- ${d.date}: $${d.price}`).join('\n')}` : ''}
-
+${prefsSection}
 Based on this data, provide your prediction. Consider:
 - Price trend over time (rising, falling, stable)
 - How far the departure date is from today (${this.daysFromToday(departureDate)} days away)

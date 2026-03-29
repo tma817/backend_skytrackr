@@ -8,6 +8,7 @@ import { PriceGrid, PriceGridSchema } from './schemas/price-grid.schema';
 import { AirlinesService } from 'src/airlines/airlines.service';
 import { AirlinesModule } from 'src/airlines/airlines.module';
 import { AirportsModule } from 'src/airports/airports.module';
+import { UsersModule } from 'src/users/users.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { AirportsModule } from 'src/airports/airports.module';
     ]),
     AirlinesModule,
     AirportsModule,
+    UsersModule,
   ],
   controllers: [FlightsController],
   providers: [FlightsService],

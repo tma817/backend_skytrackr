@@ -24,4 +24,9 @@ export class PredictPriceDto {
   @IsOptional()
   @IsString()
   currency?: string = 'CAD';
+
+  @ApiPropertyOptional({ example: 'user@example.com' })
+  @IsOptional()
+  @IsString()
+  userEmail?: string;
 }

@@ -12,6 +12,7 @@ import { Model } from 'mongoose';
 import { SearchFlightsDto } from './dto/search-flights.dto';
 import { AirlinesService } from 'src/airlines/airlines.service';
 import { AirportsService } from 'src/airports/airports.service';
+import { UsersService } from 'src/users/users.service';
 import Anthropic from '@anthropic-ai/sdk';
 
 @Injectable()
@@ -28,6 +29,7 @@ export class FlightsService {
     private priceGridModel: Model<PriceGrid>,
     private airlineService: AirlinesService,
     private airportsService: AirportsService,
+    private usersService: UsersService,
   ) {}
 
   private async getAccessToken() {
@@ -715,8 +717,11 @@ export class FlightsService {
     currency?: string;
     oneWay?: boolean;
     returnDate?: string;
+    userEmail?: string;
   }) {
-    const { origin, destination, departureDate, currentPrice, currency = 'CAD', oneWay = true, returnDate } = params;
+    const { origin, destination, departureDate, currentPrice, currency = 'CAD', oneWay = true, returnDate, userEmail } = params;
+
+    const prefs = userEmail ? await this.usersService.getPreferences(userEmail) : null;
 
     const today = new Date();
     const dep = new Date(departureDate + 'T00:00:00');
@@ -758,6 +763,18 @@ export class FlightsService {
     // ── AI verdict when price grid data is available ──────────────────────────
     if (priceMetrics && percentile !== null && daysUntil > 0) {
       try {
+        const prefsSection = prefs
+          ? `\n          USER TRAVEL PROFILE:
+          - Budget ceiling: ${prefs.budgetMax ? `${prefs.budgetMax} ${currency}` : 'not set'}
+          - Date flexibility: ${prefs.flexibility ? `±${prefs.flexibility} days` : 'none'}
+          - Prefers direct flights: ${prefs.prefersDirect ? 'yes' : 'no'}
+          - Preferred cabin: ${prefs.preferredCabin ?? 'ECONOMY'}
+
+          Apply the user profile:
+          - If the current price is at or above their budget ceiling, flag it and recommend buying now before it rises further.
+          - If they have date flexibility and nearby dates are significantly cheaper, mention the specific cheaper date and savings amount.`
+          : '';
+
         const prompt = `You are a flight price analyst. Give a clear buy/wait recommendation based on the data below.
           ROUTE: ${origin} → ${destination}
           DEPARTURE: ${departureDate} (${daysUntil} days from today)
@@ -774,6 +791,7 @@ export class FlightsService {
           - A price below the median is generally a good deal.
           - If the price is above the 70th percentile AND departure is more than 2 weeks away, waiting may help.
           - If departure is within 7 days, always recommend buying now.
+          ${prefsSection}
 
           Respond ONLY with a valid JSON object, no other text:
           {

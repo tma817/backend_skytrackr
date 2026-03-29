@@ -206,7 +206,7 @@ export class MailService {
 
               <!-- Track button -->
               <div style="text-align:center;margin-bottom:28px;">
-                <a href="${process.env.FRONTEND_URL ?? '#'}/booking/track?pnr=${booking.pnr ?? ''}"
+                <a href="${process.env.FRONTEND_URL ?? '#'}/booking/track?pnr=${booking.pnr ?? ''}&lastName=${encodeURIComponent(booking.travelers?.[0]?.name?.lastName ?? '')}"
                    style="display:inline-block;padding:13px 32px;background:#ffffff;color:#000000;border-radius:10px;font-size:14px;font-weight:700;text-decoration:none;letter-spacing:0.5px;">
                   Track Your Booking
                 </a>
