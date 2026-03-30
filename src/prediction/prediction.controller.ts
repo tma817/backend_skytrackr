@@ -16,6 +16,7 @@ export class PredictionController {
       dto.destination,
       dto.departureDate,
       dto.currency,
+      dto.userEmail,
     );
   }
 }

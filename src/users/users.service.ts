@@ -63,6 +63,20 @@ export class UsersService {
     return this.userModel.find().exec();
   }
 
+  async getPreferences(email: string) {
+    const user = await this.userModel.findOne({ email }).select('preferences').lean();
+    return user?.preferences ?? null;
+  }
+
+  async updatePreferences(email: string, preferences: Record<string, any>) {
+    const user = await this.userModel.findOneAndUpdate(
+      { email },
+      { $set: { preferences } },
+      { new: true },
+    ).lean();
+    return user?.preferences ?? null;
+  }
+
   async updatePassword(email: string, newPassword: string): Promise<void> {
     const hashed = await this.hashPassword(newPassword);
     await this.userModel.updateOne({ email }, { $set: { password: hashed } }).exec();

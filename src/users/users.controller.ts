@@ -10,6 +10,7 @@ import {
   NotFoundException,
   UseInterceptors,
   ClassSerializerInterceptor,
+  BadRequestException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User } from './schemas/user.schema';
@@ -53,6 +54,24 @@ export class UsersController {
     }
     const { password, otpCode, otpExpires, ...safe } = (updatedUser as any).toObject();
     return safe;
+  }
+
+  @Get(':email/preferences')
+  async getPreferences(@Param('email') email: string) {
+    return this.usersService.getPreferences(email);
+  }
+
+  @Patch(':email/preferences')
+  async updatePreferences(
+    @Param('email') email: string,
+    @Body() preferences: Record<string, any>,
+  ) {
+    const ALLOWED = ['homeAirport', 'budgetMax', 'flexibility', 'prefersDirect', 'preferredCabin'];
+    const sanitized: Record<string, any> = {};
+    for (const key of ALLOWED) {
+      if (key in preferences) sanitized[key] = preferences[key];
+    }
+    return this.usersService.updatePreferences(email, sanitized);
   }
 
   //   @UseGuards(JwtAuthGuard)

@@ -4,6 +4,7 @@ import { PredictionService } from './prediction.service';
 import { PredictionController } from './prediction.controller';
 import { PriceHistory, PriceHistorySchema } from 'src/watchlist/schemas/price-history.schema';
 import { PriceGrid, PriceGridSchema } from 'src/flights/schemas/price-grid.schema';
+import { UsersModule } from 'src/users/users.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { PriceGrid, PriceGridSchema } from 'src/flights/schemas/price-grid.schem
       { name: PriceHistory.name, schema: PriceHistorySchema },
       { name: PriceGrid.name, schema: PriceGridSchema },
     ]),
+    UsersModule,
   ],
   controllers: [PredictionController],
   providers: [PredictionService],
