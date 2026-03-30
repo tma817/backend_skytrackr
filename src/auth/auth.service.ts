@@ -16,13 +16,13 @@ export class AuthService {
     const user = await this.usersService.findOne(email);
 
     if (!user) {
-      throw new UnauthorizedException("Email and Password do not match! Please try again later");
+      throw new UnauthorizedException("Email and Password do not match! Please try again");
     }
 
     const isMatch = await bcrypt.compare(pass, user.password);
 
     if (!isMatch) {
-      throw new UnauthorizedException("Email and Password do not match! Please try again later");
+      throw new UnauthorizedException("Email and Password do not match! Please try again");
     }
 
     if (!user.isVerified) {
